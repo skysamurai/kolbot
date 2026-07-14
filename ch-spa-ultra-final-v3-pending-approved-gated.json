@@ -1,0 +1,3368 @@
+{
+  "name": "CH-spa ULTRA FINAL v3",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message",
+          "callback_query"
+        ]
+      },
+      "id": "telegram_trigger",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [
+        260,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const normalizeBaseUrl = (value) => {\n  const raw = String(value || '').trim();\n  if (!raw) return '';\n  return raw.replace(/\\/rest\\/v1\\/?$/i, '').replace(/\\/+$/,'');\n};\n\nconst input = $input.first()?.json || {};\n\n// ВСТАВЬ СЮДА РЕАЛЬНЫЕ ЗНАЧЕНИЯ\nconst supabaseUrl = normalizeBaseUrl('https://YOUR_PROJECT.supabase.co');\nconst supabaseKey = String('YOUR_SUPABASE_SERVICE_ROLE_KEY').trim();\nconst subscriptionUrl = String('https://t.me/SkrabVarezkaPiling').trim();\nconst ykShopId = String('YOUR_YOOKASSA_SHOP_ID').trim();\nconst ykSecret = String('YOUR_YOOKASSA_SECRET_KEY').trim();\nconst paymentReturnUrl = String('https://YOUR_DOMAIN/thanks').trim();\nconst managersGroupChatId = String('-1003989386408').trim();\nconst adminUserId = String('7260765133').trim();\n\nconst config = {\n  SUPABASE_URL: supabaseUrl,\n  SUPABASE_REST_URL: supabaseUrl ? `${supabaseUrl}/rest/v1` : '',\n  SUPABASE_SERVICE_ROLE_KEY: supabaseKey,\n  SUPABASE_CONFIGURED: !!(\n    supabaseUrl &&\n    !supabaseUrl.includes('YOUR_PROJECT') &&\n    supabaseKey &&\n    !supabaseKey.includes('YOUR_SUPABASE')\n  ),\n\n  SUBSCRIPTION_URL: subscriptionUrl,\n  MANAGERS_GROUP_CHAT_ID: managersGroupChatId,\n  ADMIN_USER_ID: adminUserId,\n\n  PAYMENT_PROVIDER: 'yookassa',\n  YOOKASSA_SHOP_ID: ykShopId,\n  YOOKASSA_SECRET_KEY: ykSecret,\n  PAYMENT_RETURN_URL: paymentReturnUrl,\n  PAYMENT_CURRENCY: 'RUB',\n  PAYMENTS_CONFIGURED: !!(\n    ykShopId &&\n    !ykShopId.includes('YOUR_YOOKASSA') &&\n    ykSecret &&\n    !ykSecret.includes('YOUR_YOOKASSA') &&\n    paymentReturnUrl &&\n    !paymentReturnUrl.includes('YOUR_DOMAIN')\n  ),\n\n  UPSELL_STANDARD_KEY: 'upsell_standard',\n  UPSELL_STANDARD_LABEL: 'Апгрейд CH-spa',\n  UPSELL_STANDARD_AMOUNT: 1990,\n  UPSELL_STANDARD_PRICE_LABEL: '1990 ₽',\n\n  WARMUP_ENABLED: true\n};\n\nreturn [{\n  json: {\n    ...input,\n    ...config,\n    app_config: config,\n    raw: input.raw || input\n  }\n}];"
+      },
+      "id": "app_config",
+      "name": "App Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const store = $getWorkflowStaticData('global');\nstore.users = store.users || {};\nstore.submissions = store.submissions || {};\nstore.payments = store.payments || {};\nstore.events = store.events || [];\n\nconst appConfig = $items('App Config', 0, 0)[0]?.json?.app_config || $items('App Config', 0, 0)[0]?.json || {};\n\nfor (const item of items) {\n  const raw = item.json.raw || item.json;\n  const msg = raw.message || item.json.message || {};\n  const cb = raw.callback_query || item.json.callback_query || {};\n  const from = msg.from || cb.from || {};\n  const chatId = msg.chat?.id || cb.message?.chat?.id || from.id || null;\n  const key = chatId !== null ? String(chatId) : null;\n  const text = msg.text || '';\n  const callbackData = cb.data || '';\n  const hasPhoto = Array.isArray(msg.photo) && msg.photo.length > 0;\n  const contact = msg.contact || {};\n  const contactPhone = contact.phone_number || '';\n\n  if (key) {\n    const existing = store.users[key] || {};\n    store.users[key] = {\n      chatId,\n      username: from.username || existing.username || '',\n      firstName: from.first_name || existing.firstName || '',\n      lastName: from.last_name || existing.lastName || '',\n      phone: contactPhone || existing.phone || '',\n      state: existing.state || 'new',\n      previousState: existing.previousState || 'new',\n      selectedLevelKey: existing.selectedLevelKey || '',\n      selectedLevelLabel: existing.selectedLevelLabel || '',\n      giftValue: existing.giftValue || 0,\n      lastPhoto: existing.lastPhoto || null,\n      lastSubmissionId: existing.lastSubmissionId || null,\n      lastApprovedSubmissionId: existing.lastApprovedSubmissionId || null,\n      currentFlow: existing.currentFlow || 'purchase',\n      currentReviewId: existing.currentReviewId || null,\n      giftsUnlocked: existing.giftsUnlocked || false,\n      createdAt: existing.createdAt || new Date().toISOString(),\n      updatedAt: new Date().toISOString(),\n      lastSeenAt: new Date().toISOString(),\n      lastMessageText: text || existing.lastMessageText || '',\n      lastCallbackData: callbackData || existing.lastCallbackData || '',\n      stepLabel: existing.stepLabel || '',\n      source: existing.source || 'telegram'\n    };\n\n    item.json.crm = {\n      telegram_user_id: from.id || null,\n      telegram_chat_id: chatId,\n      username: from.username || '',\n      first_name: from.first_name || '',\n      last_name: from.last_name || '',\n      phone_raw: contactPhone || '',\n      phone_normalized: contactPhone || '',\n      state: store.users[key].state,\n      previous_state: store.users[key].previousState,\n      current_flow: store.users[key].currentFlow,\n      selected_package_key: store.users[key].selectedLevelKey,\n      selected_package_label: store.users[key].selectedLevelLabel,\n      selected_package_gift_value: store.users[key].giftValue,\n      gifts_unlocked: store.users[key].giftsUnlocked,\n      updated_at: new Date().toISOString(),\n      last_seen_at: new Date().toISOString()\n    };\n  }\n\n  item.json.raw = raw;\n  item.json.message = msg;\n  item.json.callback_query = cb;\n  item.json.app_config = appConfig;\n  store.events.push({\n    at: new Date().toISOString(),\n    chatId,\n    text,\n    callbackData,\n    hasPhoto,\n    hasContact: !!contact.phone_number\n  });\n}\nif (store.events.length > 5000) store.events = store.events.slice(-5000);\nreturn items;"
+      },
+      "id": "upsert_user",
+      "name": "Upsert User",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "expression",
+        "numberOutputs": 26,
+        "output": "={{ (() => {\n  const text = String($json.message?.text || '').trim();\n  const cb = String($json.callback_query?.data || '');\n  const hasPhoto = Array.isArray($json.message?.photo) && $json.message.photo.length > 0;\n  const hasDocument = !!$json.message?.document;\n  const hasContact = !!$json.message?.contact?.phone_number;\n  const phoneLike = /^\\+?\\d[\\d\\s\\-()]{8,}$/.test(text);\n\n  const fromId = String(\n    $json.message?.from?.id ||\n    $json.callback_query?.from?.id ||\n    ''\n  );\n\n  const adminId = String(\n    $json.app_config?.ADMIN_USER_ID ||\n    '7260765133'\n  );\n\n  const crm = $json.crm || {};\n  const state = String(crm.state || 'new');\n\n  if (text.startsWith('/start')) return 0;\n\n  if (cb === 'START_PURCHASE' || cb === 'START_FLOW' || text === '🎁 Получить бонусы') return 1;\n\n  if (cb === 'SUB_CONFIRMED') return 2;\n\n  if (hasContact) return 3;\n  if (!hasContact && phoneLike && state === 'awaiting_contact') return 25;\n\n  if (text === '1 варежка (3000 руб.)') return 4;\n  if (text === '1+2 варежки (7000 руб.)') return 5;\n  if (text === 'VIP: 1+2+5 варежек (11000 руб.)') return 6;\n\n  if ((hasPhoto || hasDocument) && (state === 'awaiting_photo' || state === 'awaiting_purchase_photo')) return 7;\n\n  if (cb.startsWith('APPROVE_PURCHASE|') || cb.startsWith('APPROVE|')) return 8;\n  if (cb.startsWith('REJECT_PURCHASE|') || cb.startsWith('REJECT|')) return 9;\n\n  if (cb === 'START_REVIEW' || text === '⭐ Оставить отзыв') return 10;\n\n  if (\n    cb === 'MARKETPLACE_WB' ||\n    cb === 'MARKETPLACE_OZON' ||\n    cb === 'MARKETPLACE_YM' ||\n    cb === 'MARKETPLACE_OTHER'\n  ) return 11;\n\n  if ((hasPhoto || hasDocument) && state === 'awaiting_review_screenshot') return 12;\n  if ((hasPhoto || hasDocument) && state === 'awaiting_review_product_photo') return 13;\n\n  if (cb.startsWith('APPROVE_REVIEW|')) return 14;\n  if (cb.startsWith('REJECT_REVIEW|')) return 15;\n\n  if (text === '📍 Мой статус' || text === '/status') return 16;\n\n  if (text === '⬅️ Назад' || text === '/back') return 17;\n\n  if (text === '▶️ Продолжить' || text === '/continue') return 18;\n\n  if (text === '🔄 Начать заново' || text === '/reset') return 19;\n\n  if (text === '💬 Помощь' || text === '/help') return 20;\n\n  if (fromId === adminId && text === '/export_users') return 21;\n\n  if (\n    fromId === adminId &&\n    (\n      /^\\/broadcast\\b/.test(text) ||\n      text === '/stats' ||\n      /^\\/user\\b/.test(text)\n    )\n  ) return 22;\n\n  if (cb === 'UPSELL_YES' || cb === 'BUY_UPSELL_STANDARD' || text === '🔥 Увеличить подарок') return 23;\n\n  if (cb === 'UPSELL_NO' || text === '❌ Нет, спасибо') return 24;\n\n  return 20;\n})() }}"
+      },
+      "id": "router",
+      "name": "Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        760,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst store = $getWorkflowStaticData('global');\nstore.users = store.users || {};\nconst chatId = $json.message.chat.id;\nconst key = String(chatId);\nconst user = store.users[key] || { chatId };\nuser.previousState = user.state || 'new';\nuser.state = 'start';\nuser.stepLabel = 'Главное меню';\nuser.updatedAt = new Date().toISOString();\nstore.users[key] = user;\nreturn [{ json: { chatId } }];\n"
+      },
+      "id": "set_start_state",
+      "name": "Set Start State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ 'Добро пожаловать в мир красоты <b>CH-spa</b> ✨\\n\\nЧтобы получить бонусы, пройди 4 шага:\\n1. Подпишись на нашу группу\\n2. Оставь контакт\\n3. Выбери пакет покупки\\n4. Отправь фото товара или скрин заказа\\n\\nНажми кнопку ниже, чтобы начать, или используй меню.' }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        },
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🎁 Получить бонусы",
+                    "additionalFields": {
+                      "callback_data": "START_PURCHASE"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "id": "start_welcome",
+      "name": "Start Welcome",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst store = $getWorkflowStaticData('global');\nstore.users = store.users || {};\nconst chatId = $json.callback_query?.message?.chat?.id || $json.message?.chat?.id;\nconst key = String(chatId);\nconst user = store.users[key] || { chatId };\nuser.previousState = user.state || 'start';\nuser.state = 'awaiting_subscription';\nuser.stepLabel = 'Подписка на группу';\nuser.updatedAt = new Date().toISOString();\nstore.users[key] = user;\nreturn [{ json: { chatId } }];\n"
+      },
+      "id": "mark_awaiting_subscription",
+      "name": "Mark Awaiting Subscription",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ 'Шаг 1 из 4.\\n\\nПодпишись на нашу группу: ' + ($items('App Config', 0, 0)[0]?.json?.SUBSCRIPTION_URL || 'https://t.me/SkrabVarezkaPiling') + '\\n\\nЗатем нажми кнопку «Я подписался» 👇' }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        },
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Подписаться на группу",
+                    "additionalFields": {
+                      "url": "={{ $items('App Config', 0, 0)[0]?.json?.SUBSCRIPTION_URL || 'https://t.me/SkrabVarezkaPiling' }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Я подписался",
+                    "additionalFields": {
+                      "callback_data": "SUB_CONFIRMED"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "id": "ask_subscription",
+      "name": "Ask Subscription",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst store = $getWorkflowStaticData('global');\nstore.users = store.users || {};\nconst chatId = $json.callback_query.message.chat.id;\nconst key = String(chatId);\nconst user = store.users[key] || { chatId };\nuser.previousState = user.state || 'awaiting_subscription';\nuser.state = 'awaiting_contact';\nuser.stepLabel = 'Ожидаем контакт';\nuser.updatedAt = new Date().toISOString();\nstore.users[key] = user;\nreturn [{ json: { chatId } }];\n"
+      },
+      "id": "mark_awaiting_contact",
+      "name": "Mark Awaiting Contact",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId || $json.message?.chat?.id || $json.callback_query?.message?.chat?.id }}",
+        "text": "={{ 'Шаг 2 из 4.\\n\\nНажми кнопку ниже «📱 Отправить контакт».\\nНомер вручную вводить не нужно 👇' }}",
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "📱 Отправить контакт",
+                    "additionalFields": {
+                      "request_contact": true
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "⬅️ Назад"
+                  },
+                  {
+                    "text": "💬 Помощь"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": {
+          "resize_keyboard": true,
+          "one_time_keyboard": true
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "ask_contact",
+      "name": "Ask Contact",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const store = $getWorkflowStaticData('global');\nstore.users = store.users || {};\n\nconst chatId = $json.message?.chat?.id;\nif (!chatId) {\n  throw new Error('chatId not found');\n}\n\nconst contactPhone = $json.message?.contact?.phone_number || '';\nif (!contactPhone) {\n  throw new Error('Telegram contact object not found');\n}\n\nconst key = String(chatId);\nconst user = store.users[key] || { chatId };\n\nuser.phone = contactPhone;\nuser.previousState = user.state || 'awaiting_contact';\nuser.state = 'awaiting_package';\nuser.stepLabel = 'Выбор пакета';\nuser.updatedAt = new Date().toISOString();\n\nstore.users[key] = user;\n\nreturn [{\n  json: {\n    ...$json,\n    chatId,\n    phone: contactPhone\n  }\n}];"
+      },
+      "id": "save_contact",
+      "name": "Save Contact",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ 'Шаг 3 из 4.\\n\\nОтлично! Теперь выбери пакет покупки 👇' }}",
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "1 варежка (3000 руб.)"
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "1+2 варежки (7000 руб.)"
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "VIP: 1+2+5 варежек (11000 руб.)"
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "⬅️ Назад"
+                  },
+                  {
+                    "text": "📍 Мой статус"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": {
+          "resize_keyboard": true,
+          "one_time_keyboard": true
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "ask_package",
+      "name": "Ask Package",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst store = $getWorkflowStaticData('global');\nstore.users = store.users || {};\nconst chatId = $json.message.chat.id;\nconst key = String(chatId);\nconst user = store.users[key] || { chatId };\nuser.previousState = user.state || 'awaiting_package';\nuser.state = 'awaiting_photo';\nuser.selectedLevelKey = 'standard';\nuser.selectedLevelLabel = '1 варежка (3000 руб.)';\nuser.giftValue = 3000;\nuser.stepLabel = 'Ожидаем фото';\nuser.updatedAt = new Date().toISOString();\nstore.users[key] = user;\nreturn [{ json: { chatId, levelKey: 'standard', levelLabel: '1 варежка (3000 руб.)', giftValue: 3000 } }];\n"
+      },
+      "id": "save_package_standard",
+      "name": "Save Package Standard",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst store = $getWorkflowStaticData('global');\nstore.users = store.users || {};\nconst chatId = $json.message.chat.id;\nconst key = String(chatId);\nconst user = store.users[key] || { chatId };\nuser.previousState = user.state || 'awaiting_package';\nuser.state = 'awaiting_photo';\nuser.selectedLevelKey = 'premium';\nuser.selectedLevelLabel = '1+2 варежки (7000 руб.)';\nuser.giftValue = 7000;\nuser.stepLabel = 'Ожидаем фото';\nuser.updatedAt = new Date().toISOString();\nstore.users[key] = user;\nreturn [{ json: { chatId, levelKey: 'premium', levelLabel: '1+2 варежки (7000 руб.)', giftValue: 7000 } }];\n"
+      },
+      "id": "save_package_premium",
+      "name": "Save Package Premium",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst store = $getWorkflowStaticData('global');\nstore.users = store.users || {};\nconst chatId = $json.message.chat.id;\nconst key = String(chatId);\nconst user = store.users[key] || { chatId };\nuser.previousState = user.state || 'awaiting_package';\nuser.state = 'awaiting_photo';\nuser.selectedLevelKey = 'vip';\nuser.selectedLevelLabel = 'VIP: 1+2+5 варежек (11000 руб.)';\nuser.giftValue = 11000;\nuser.stepLabel = 'Ожидаем фото';\nuser.updatedAt = new Date().toISOString();\nstore.users[key] = user;\nreturn [{ json: { chatId, levelKey: 'vip', levelLabel: 'VIP: 1+2+5 варежек (11000 руб.)', giftValue: 11000 } }];\n"
+      },
+      "id": "save_package_vip",
+      "name": "Save Package VIP",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ 'Шаг 4 из 4.\\n\\nОтправь фото товара, упаковки или скрин заказа, чтобы мы подтвердили покупку и открыли подарки 🎁' }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        },
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🎁 Получить бонусы"
+                  },
+                  {
+                    "text": "▶️ Продолжить"
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "📍 Мой статус"
+                  },
+                  {
+                    "text": "⬅️ Назад"
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🔄 Начать заново"
+                  },
+                  {
+                    "text": "💬 Помощь"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": {
+          "resize_keyboard": true
+        }
+      },
+      "id": "ask_for_photo",
+      "name": "Ask For Photo",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const store = $getWorkflowStaticData('global');\nstore.users = store.users || {};\n\nconst msg = $json.message || {};\nconst chatId = msg.chat?.id;\n\nif (!chatId) {\n  throw new Error('chatId not found');\n}\n\nconst photos = Array.isArray(msg.photo) ? msg.photo : [];\nconst bestPhoto = photos.length ? photos[photos.length - 1] : null;\n\nconst doc = msg.document || null;\nconst docMime = String(doc?.mime_type || '').toLowerCase();\nconst docName = String(doc?.file_name || '').toLowerCase();\nconst isImageDocument =\n  !!doc &&\n  (\n    docMime.startsWith('image/') ||\n    docName.endsWith('.jpg') ||\n    docName.endsWith('.jpeg') ||\n    docName.endsWith('.png') ||\n    docName.endsWith('.webp')\n  );\n\nconst fileId =\n  bestPhoto?.file_id ||\n  (isImageDocument ? doc.file_id : null);\n\nif (!fileId) {\n  throw new Error('Photo or image document not found in message');\n}\n\nconst key = String(chatId);\nconst user = store.users[key] || { chatId };\n\nuser.lastPhoto = {\n  fileId,\n  fileUniqueId: bestPhoto?.file_unique_id || doc?.file_unique_id || '',\n  sourceType: bestPhoto ? 'message.photo' : 'message.document',\n  savedAt: new Date().toISOString()\n};\n\nuser.previousState = user.state || 'awaiting_photo';\nuser.state = 'waiting_purchase_review';\nuser.stepLabel = 'Проверяем покупку';\nuser.updatedAt = new Date().toISOString();\n\nstore.users[key] = user;\n\nreturn [{\n  json: {\n    ...$json,\n    chatId,\n    photoFileId: fileId,\n    uploadType: bestPhoto ? 'message.photo' : 'message.document'\n  }\n}];"
+      },
+      "id": "save_photo",
+      "name": "Save Photo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        740
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const store = $getWorkflowStaticData('global');\nstore.users = store.users || {};\nstore.submissions = store.submissions || {};\n\nconst chatId = $json.raw?.message?.chat?.id || $json.message?.chat?.id || $json.chatId || $json.crm?.telegram_chat_id;\nconst key = String(chatId);\nconst user = store.users[key] || {};\n\nif (!user.selectedLevelKey || !user.selectedLevelLabel) throw new Error('Сначала нужно выбрать пакет.');\nif (!user.lastPhoto || !user.lastPhoto.fileId) throw new Error('Сначала нужно отправить фото.');\n\nconst submissionId = `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;\nstore.submissions[submissionId] = {\n  submissionId,\n  status: 'pending',\n  userChatId: chatId,\n  username: user.username || '',\n  firstName: user.firstName || '',\n  levelKey: user.selectedLevelKey,\n  levelLabel: user.selectedLevelLabel,\n  giftValue: user.giftValue || 0,\n  phone: user.phone || '',\n  photoFileId: user.lastPhoto.fileId,\n  createdAt: new Date().toISOString()\n};\n\nuser.lastSubmissionId = submissionId;\nuser.previousState = user.state || 'awaiting_purchase_photo';\nuser.state = 'waiting_purchase_review';\nuser.stepLabel = 'Проверяем покупку';\nuser.updatedAt = new Date().toISOString();\nstore.users[key] = user;\n\nreturn [{\n  json: {\n    submissionId,\n    status: 'pending',\n    adminChatId: String($json.app_config?.MANAGERS_GROUP_CHAT_ID || '-1003989386408'),\n    userChatId: chatId,\n    username: user.username || '',\n    firstName: user.firstName || '',\n    phone: user.phone || '',\n    levelKey: user.selectedLevelKey,\n    levelLabel: user.selectedLevelLabel,\n    giftValue: user.giftValue || 0,\n    photoFileId: user.lastPhoto.fileId\n  }\n}];"
+      },
+      "id": "prepare_submission",
+      "name": "Prepare Submission",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        860
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.userChatId }}",
+        "text": "={{ 'Проверяем покупку. Это займёт до 30 минут.\\n\\nСтатус сейчас: <b>на проверке</b>.\\nБонусы откроются только после подтверждения покупки.\\n\\nТы можешь нажать <b>📍 Мой статус</b> в любой момент.' }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        },
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🎁 Получить бонусы"
+                  },
+                  {
+                    "text": "▶️ Продолжить"
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "📍 Мой статус"
+                  },
+                  {
+                    "text": "⬅️ Назад"
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🔄 Начать заново"
+                  },
+                  {
+                    "text": "💬 Помощь"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": {
+          "resize_keyboard": true
+        }
+      },
+      "id": "user_waiting",
+      "name": "User Waiting",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        820
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendPhoto",
+        "chatId": "={{ $json.adminChatId }}",
+        "file": "={{ $json.photoFileId }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "✅ Одобрить",
+                    "additionalFields": {
+                      "callback_data": "={{ 'APPROVE|' + $json.submissionId }}"
+                    }
+                  },
+                  {
+                    "text": "❌ Отклонить",
+                    "additionalFields": {
+                      "callback_data": "={{ 'REJECT|' + $json.submissionId }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "caption": "={{ '<b>Новая заявка CH-spa</b>\\n' +\n'ID: <code>' + $json.submissionId + '</code>\\n' +\n'Пользователь: ' + ($json.username ? '@' + $json.username : ($json.firstName || 'Без имени')) + '\\n' +\n'User ID: <code>' + $json.userChatId + '</code>\\n' +\n'Телефон: <code>' + ($json.phone || '-') + '</code>\\n' +\n'Пакет: <b>' + $json.levelLabel + '</b>\\n' +\n'Подарок: <b>' + ($json.giftValue || 0) + ' руб.</b>' }}",
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "admin_review_photo",
+      "name": "Admin Review Photo",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        920
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const store = $getWorkflowStaticData('global');\nstore.users = store.users || {};\nstore.submissions = store.submissions || {};\n\nconst data = String($json.callback_query?.data || '');\nconst submissionId = data.includes('|') ? data.split('|')[1] : '';\nconst submission = store.submissions[submissionId];\nconst reviewerId = String($json.callback_query?.from?.id || '');\nconst adminId = String($json.app_config?.ADMIN_USER_ID || '7260765133');\n\nif (reviewerId !== adminId) {\n  return [{ json: { chatId: $json.callback_query?.message?.chat?.id, text: 'Недостаточно прав.' } }];\n}\nif (!submission) return [{ json: { chatId: $json.callback_query?.message?.chat?.id, text: 'Заявка не найдена.' } }];\nif (submission.status !== 'pending') return [{ json: { chatId: $json.callback_query?.message?.chat?.id, text: 'Заявка уже обработана.' } }];\n\nsubmission.status = 'approved';\nsubmission.reviewedAt = new Date().toISOString();\nsubmission.reviewerId = reviewerId;\n\nconst userKey = String(submission.userChatId);\nconst user = store.users[userKey] || { chatId: submission.userChatId };\nuser.previousState = user.state || 'waiting_purchase_review';\nuser.state = 'purchase_approved';\nuser.currentFlow = 'review';\nuser.stepLabel = 'Покупка одобрена';\nuser.giftsUnlocked = true;\nuser.lastApprovedSubmissionId = submissionId;\nuser.updatedAt = new Date().toISOString();\nstore.users[userKey] = user;\n\nconst giftsByLevel = {\n  standard: [\n    { title: '🎁 Фейсфитнес mini', url: `https://example.com/facefit?sub=${submissionId}` },\n    { title: '🎁 Йога для тела', url: `https://example.com/yoga?sub=${submissionId}` },\n    { title: '🎁 Уход и сияние', url: `https://example.com/beauty?sub=${submissionId}` }\n  ],\n  premium: [\n    { title: '💎 Пилатес Premium', url: `https://example.com/pilates?sub=${submissionId}` },\n    { title: '💎 Нутри-детокс', url: `https://example.com/nutri?sub=${submissionId}` },\n    { title: '💎 Самооценка и ресурс', url: `https://example.com/mindset?sub=${submissionId}` }\n  ],\n  vip: [\n    { title: '👑 VIP Beauty Reset', url: `https://example.com/vip-beauty?sub=${submissionId}` },\n    { title: '👑 Телесный антистресс', url: `https://example.com/body-reset?sub=${submissionId}` },\n    { title: '👑 Энергия и женственность', url: `https://example.com/woman-power?sub=${submissionId}` }\n  ]\n};\n\nreturn [{\n  json: {\n    submissionId,\n    status: submission.status,\n    userChatId: submission.userChatId,\n    giftValue: submission.giftValue,\n    gifts: giftsByLevel[submission.levelKey] || [],\n    reviewOfferText: 'Хочешь получить дополнительный подарок?\\n\\nОставь отзыв на маркетплейсе и получи ещё один бонус 👇'\n  }\n}];"
+      },
+      "id": "resolve_approve",
+      "name": "Resolve Approve",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        1040
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.userChatId || $json.chatId }}",
+        "text": "={{ '<b>Покупка подтверждена ✨</b>\\n\\nТвоя заявка одобрена, и бонусы уже открыты.\\nСумма бонусов: <b>' + ($json.giftValue || 0) + ' руб.</b>\\n\\nЗабирай подарки по кнопкам ниже 👇' }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "={{ $json.gifts[0].title }}",
+                    "additionalFields": {
+                      "url": "={{ $json.gifts[0].url }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "={{ $json.gifts[1].title }}",
+                    "additionalFields": {
+                      "url": "={{ $json.gifts[1].url }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "={{ $json.gifts[2].title }}",
+                    "additionalFields": {
+                      "url": "={{ $json.gifts[2].url }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": false
+        }
+      },
+      "id": "send_approved_gifts",
+      "name": "Send Approved Gifts",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        1040
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const store = $getWorkflowStaticData('global');\nstore.users = store.users || {};\nstore.submissions = store.submissions || {};\n\nconst data = String($json.callback_query?.data || '');\nconst submissionId = data.includes('|') ? data.split('|')[1] : '';\nconst submission = store.submissions[submissionId];\nconst reviewerId = String($json.callback_query?.from?.id || '');\nconst adminId = String($json.app_config?.ADMIN_USER_ID || '7260765133');\n\nif (reviewerId !== adminId) {\n  return [{ json: { userChatId: $json.callback_query?.message?.chat?.id, text: 'Недостаточно прав.' } }];\n}\nif (!submission) return [{ json: { userChatId: $json.callback_query?.message?.chat?.id, text: 'Заявка не найдена.' } }];\nif (submission.status !== 'pending') return [{ json: { userChatId: $json.callback_query?.message?.chat?.id, text: 'Заявка уже обработана.' } }];\n\nsubmission.status = 'rejected';\nsubmission.reviewedAt = new Date().toISOString();\nsubmission.reviewerId = reviewerId;\n\nconst userKey = String(submission.userChatId);\nconst user = store.users[userKey] || { chatId: submission.userChatId };\nuser.previousState = user.state || 'waiting_purchase_review';\nuser.state = 'purchase_rejected';\nuser.currentFlow = 'purchase';\nuser.stepLabel = 'Нужно отправить фото заново';\nuser.giftsUnlocked = false;\nuser.updatedAt = new Date().toISOString();\nstore.users[userKey] = user;\n\nreturn [{ json: { userChatId: submission.userChatId, text: 'К сожалению, фото не прошло проверку.\\n\\nНажми «⬅️ Назад», чтобы вернуться и отправить новое фото.' } }];"
+      },
+      "id": "resolve_reject",
+      "name": "Resolve Reject",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        1160
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.userChatId }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        },
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🎁 Получить бонусы"
+                  },
+                  {
+                    "text": "▶️ Продолжить"
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "📍 Мой статус"
+                  },
+                  {
+                    "text": "⬅️ Назад"
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🔄 Начать заново"
+                  },
+                  {
+                    "text": "💬 Помощь"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": {
+          "resize_keyboard": true
+        }
+      },
+      "id": "send_reject_message",
+      "name": "Send Reject Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        1160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const store = $getWorkflowStaticData('global');\nstore.users = store.users || {};\nconst chatId = $json.message?.chat?.id || $json.callback_query?.message?.chat?.id;\nconst user = store.users[String(chatId)] || {};\nconst labels = {\n  new: 'новый пользователь',\n  start: 'ожидаем запуск сценария',\n  awaiting_subscription: 'ожидаем подтверждение подписки',\n  awaiting_contact: 'ожидаем контакт',\n  awaiting_package: 'ожидаем выбор пакета',\n  awaiting_photo: 'ожидаем фото покупки',\n  awaiting_purchase_photo: 'ожидаем фото покупки',\n  waiting_review: 'заявка на рассмотрении менеджером',\n  waiting_purchase_review: 'заявка на рассмотрении менеджером',\n  purchase_approved: 'покупка одобрена',\n  purchase_rejected: 'покупка отклонена',\n  review_offer: 'можно получить бонус за отзыв',\n  awaiting_marketplace: 'ожидаем выбор маркетплейса',\n  awaiting_review_screenshot: 'ожидаем скрин отзыва',\n  awaiting_review_product_photo: 'ожидаем фото товара для отзыва',\n  waiting_review_review: 'отзыв на рассмотрении',\n  review_approved: 'бонус за отзыв одобрен',\n  review_rejected: 'отзыв отклонён',\n  upsell_offer: 'доступен апселл',\n  upsell_waiting: 'ожидаем решение по апселлу',\n  upsell_declined: 'апселл отклонён'\n};\nlet nextStep = 'Нажми «🎁 Получить бонусы», чтобы начать.';\nif (user.state === 'awaiting_subscription') nextStep = 'Подпишись на группу и нажми «Я подписался».';\nif (user.state === 'awaiting_contact') nextStep = 'Отправь свой контакт кнопкой ниже.';\nif (user.state === 'awaiting_package') nextStep = 'Выбери пакет покупки.';\nif (user.state === 'awaiting_photo' || user.state === 'awaiting_purchase_photo') nextStep = 'Отправь фото товара или скрин заказа.';\nif (user.state === 'waiting_review' || user.state === 'waiting_purchase_review') nextStep = 'Дождись проверки менеджером. Обычно это до 30 минут.';\nif (user.state === 'purchase_approved') nextStep = 'Подарки уже доступны. Можно запускать бонус за отзыв.';\nif (user.state === 'review_offer') nextStep = 'Нажми «⭐ Оставить отзыв», чтобы запустить review-flow.';\nif (user.state === 'awaiting_marketplace') nextStep = 'Выбери маркетплейс.';\nif (user.state === 'awaiting_review_screenshot') nextStep = 'Пришли скрин опубликованного отзыва.';\nif (user.state === 'awaiting_review_product_photo') nextStep = 'Пришли фото товара.';\nif (user.state === 'waiting_review_review') nextStep = 'Дождись проверки отзыва менеджером.';\nif (user.state === 'review_approved') nextStep = 'Дополнительный бонус уже открыт 🎁';\nif (user.state === 'review_rejected') nextStep = 'Нажми «⬅️ Назад», чтобы отправить материалы заново.';\n\nconst text = '<b>Статус заявки CH-spa</b>\\n\\n' +\n'Сейчас: <b>' + (labels[user.state] || 'нет данных') + '</b>\\n' +\n(user.selectedLevelLabel ? 'Пакет: <b>' + user.selectedLevelLabel + '</b>\\n' : '') +\n(user.phone ? 'Контакт сохранён: <code>' + user.phone + '</code>\\n' : '') +\n'\\nСледующий шаг:\\n' + nextStep;\nreturn [{ json: { chatId, text } }];"
+      },
+      "id": "build_status_message",
+      "name": "Build Status Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        1280
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        },
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🎁 Получить бонусы"
+                  },
+                  {
+                    "text": "▶️ Продолжить"
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "📍 Мой статус"
+                  },
+                  {
+                    "text": "⬅️ Назад"
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🔄 Начать заново"
+                  },
+                  {
+                    "text": "💬 Помощь"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": {
+          "resize_keyboard": true
+        }
+      },
+      "id": "send_status_message",
+      "name": "Send Status Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        1280
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst store = $getWorkflowStaticData('global');\nstore.users = store.users || {};\nconst chatId = $json.message.chat.id;\nconst key = String(chatId);\nconst old = store.users[key] || { chatId };\nstore.users[key] = {\n  ...old,\n  state: 'start',\n  previousState: 'new',\n  selectedLevelKey: '',\n  selectedLevelLabel: '',\n  giftValue: 0,\n  lastPhoto: null,\n  lastSubmissionId: null,\n  lastApprovedSubmissionId: null,\n  giftsUnlocked: false,\n  stepLabel: 'Главное меню',\n  updatedAt: new Date().toISOString()\n};\nreturn [{ json: { chatId, text: 'Сценарий сброшен. Ты можешь начать заново 👇' } }];\n"
+      },
+      "id": "reset_user_state",
+      "name": "Reset User State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        1400
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        },
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🎁 Получить бонусы",
+                    "additionalFields": {
+                      "callback_data": "START_PURCHASE"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "id": "send_reset_message",
+      "name": "Send Reset Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        1400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first()?.json || {};\nconst source = input.raw || input;\n\nconst chatId =\n  input.chatId ??\n  input.telegram_chat_id ??\n  input.crm?.telegram_chat_id ??\n  source.message?.chat?.id ??\n  source.callback_query?.message?.chat?.id ??\n  source.message?.from?.id ??\n  source.callback_query?.from?.id ??\n  null;\n\nif (!chatId) {\n  throw new Error('Build Help Message: chatId not found');\n}\n\nconst subscriptionUrl = $items('App Config', 0, 0)[0]?.json?.SUBSCRIPTION_URL || 'https://t.me/SkrabVarezkaPiling';\n\nreturn [{\n  json: {\n    ...input,\n    chatId: Number(chatId),\n    text:\n      'CH-spa • Помощь\\n\\n' +\n      'Как работает бот:\\n' +\n      '1. Подписка на группу: ' + subscriptionUrl + '\\n' +\n      '2. Контакт\\n' +\n      '3. Выбор пакета\\n' +\n      '4. Фото товара или скрин заказа\\n\\n' +\n      'Кнопка \"▶️ Продолжить\" вернёт тебя на текущий шаг.\\n' +\n      'Кнопка \"⬅️ Назад\" вернёт на предыдущий шаг.\\n' +\n      'Кнопка \"📍 Мой статус\" покажет текущее состояние заявки.'\n  }\n}];"
+      },
+      "id": "build_help_message",
+      "name": "Build Help Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        1520
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ Number($json.chatId || $json.telegram_chat_id || $json.crm?.telegram_chat_id || 0) }}",
+        "text": "={{ $json.text || 'CH-spa • Помощь\\n\\nИспользуй меню ниже:\\n🎁 Получить бонусы\\n📍 Мой статус\\n⬅️ Назад\\n🔄 Начать заново' }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_web_page_preview": true
+        },
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🎁 Получить бонусы"
+                  },
+                  {
+                    "text": "▶️ Продолжить"
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "📍 Мой статус"
+                  },
+                  {
+                    "text": "⬅️ Назад"
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🔄 Начать заново"
+                  },
+                  {
+                    "text": "💬 Помощь"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": {
+          "resize_keyboard": true
+        }
+      },
+      "id": "send_help_message",
+      "name": "Send Help Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        1520
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const store = $getWorkflowStaticData('global');\nstore.users = store.users || {};\nconst chatId = $json.message?.chat?.id || $json.callback_query?.message?.chat?.id || $json.chatId || $json.crm?.telegram_chat_id;\nconst user = store.users[String(chatId)] || {};\nconst subscriptionUrl = $items('App Config', 0, 0)[0]?.json?.SUBSCRIPTION_URL || 'https://t.me/SkrabVarezkaPiling';\nlet text = '';\nswitch (user.state) {\n  case 'awaiting_subscription':\n    text = 'Ты остановилась на шаге 1 из 4.\\n\\nПодпишись на группу: ' + subscriptionUrl + '\\nИ нажми «Я подписался».';\n    break;\n  case 'awaiting_contact':\n    text = 'Ты остановилась на шаге 2 из 4.\\n\\nОтправь свой контакт, чтобы продолжить.';\n    break;\n  case 'awaiting_package':\n    text = 'Ты остановилась на шаге 3 из 4.\\n\\nВыбери пакет покупки.';\n    break;\n  case 'awaiting_photo':\n  case 'awaiting_purchase_photo':\n    text = 'Ты остановилась на шаге 4 из 4.\\n\\nОтправь фото товара или скрин заказа.';\n    break;\n  case 'waiting_review':\n  case 'waiting_purchase_review':\n    text = 'Твоя заявка уже на рассмотрении менеджером. Проверяй статус через «📍 Мой статус».';\n    break;\n  case 'purchase_approved':\n  case 'approved':\n    text = 'Покупка уже подтверждена. Бонусы и подарки доступны 🎁';\n    break;\n  case 'review_offer':\n    text = 'Покупка подтверждена. Ты можешь запустить бонус за отзыв кнопкой «⭐ Оставить отзыв».';\n    break;\n  case 'awaiting_marketplace':\n    text = 'Выбери маркетплейс, где ты оставила отзыв.';\n    break;\n  case 'awaiting_review_screenshot':\n    text = 'Пришли скрин опубликованного отзыва.';\n    break;\n  case 'awaiting_review_product_photo':\n    text = 'Теперь пришли фото товара для бонуса за отзыв.';\n    break;\n  default:\n    text = 'Нажми «🎁 Получить бонусы», чтобы начать путь заново.';\n}\nreturn [{ json: { ...$json, chatId, text } }];"
+      },
+      "id": "build_continue_message",
+      "name": "Build Continue Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        1640
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        },
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🎁 Получить бонусы"
+                  },
+                  {
+                    "text": "▶️ Продолжить"
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "📍 Мой статус"
+                  },
+                  {
+                    "text": "⬅️ Назад"
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🔄 Начать заново"
+                  },
+                  {
+                    "text": "💬 Помощь"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": {
+          "resize_keyboard": true
+        }
+      },
+      "id": "send_continue_message",
+      "name": "Send Continue Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        1640
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const store = $getWorkflowStaticData('global');\nstore.users = store.users || {};\nconst chatId = $json.message?.chat?.id || $json.callback_query?.message?.chat?.id || $json.chatId || $json.crm?.telegram_chat_id;\nconst key = String(chatId);\nconst user = store.users[key] || { chatId };\nconst subscriptionUrl = $items('App Config', 0, 0)[0]?.json?.SUBSCRIPTION_URL || 'https://t.me/SkrabVarezkaPiling';\nlet text = '';\n\nif (user.state === 'awaiting_contact') {\n  user.previousState = user.state;\n  user.state = 'awaiting_subscription';\n  user.stepLabel = 'Подписка на группу';\n  text = 'Возвращаю тебя на шаг 1 из 4 — подпишись на группу: ' + subscriptionUrl;\n} else if (user.state === 'awaiting_package') {\n  user.previousState = user.state;\n  user.state = 'awaiting_contact';\n  user.stepLabel = 'Ожидаем контакт';\n  text = 'Возвращаю тебя на шаг 2 из 4 — контакт.';\n} else if (user.state === 'awaiting_photo') {\n  user.previousState = user.state;\n  user.state = 'awaiting_package';\n  user.stepLabel = 'Выбор пакета';\n  text = 'Возвращаю тебя на шаг 3 из 4 — выбор пакета.';\n} else if (user.state === 'rejected' || user.state === 'purchase_rejected' || user.state === 'review_rejected') {\n  user.previousState = user.state;\n  user.state = 'awaiting_photo';\n  user.stepLabel = 'Ожидаем фото';\n  text = 'Возвращаю тебя на шаг 4 из 4 — отправь новое фото.';\n} else {\n  text = 'Сейчас вернуться назад нельзя. Нажми «▶️ Продолжить» или «📍 Мой статус».';\n}\nuser.updatedAt = new Date().toISOString();\nstore.users[key] = user;\nreturn [{ json: { ...$json, chatId, text, state: user.state } }];"
+      },
+      "id": "build_back_message",
+      "name": "Build Back Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        1760
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        },
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🎁 Получить бонусы"
+                  },
+                  {
+                    "text": "▶️ Продолжить"
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "📍 Мой статус"
+                  },
+                  {
+                    "text": "⬅️ Назад"
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🔄 Начать заново"
+                  },
+                  {
+                    "text": "💬 Помощь"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": {
+          "resize_keyboard": true
+        }
+      },
+      "id": "send_back_message",
+      "name": "Send Back Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        1760
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst store = $getWorkflowStaticData('global');\nconst users = Object.values(store.users || {});\nconst esc = (v) => `\"${String(v ?? '').replace(/\"/g, '\"\"')}\"`;\nconst header = ['chatId','username','firstName','lastName','phone','state','selectedLevelLabel','createdAt','lastSeenAt'].join(';');\nconst rows = users.map(u => [esc(u.chatId),esc(u.username),esc(u.firstName),esc(u.lastName),esc(u.phone),esc(u.state),esc(u.selectedLevelLabel),esc(u.createdAt),esc(u.lastSeenAt)].join(';'));\nconst csv = [header, ...rows].join('\\n');\nconst fileName = `ch-spa-users-${new Date().toISOString().slice(0,10)}.csv`;\nreturn [{ json: { chatId: $json.message.chat.id }, binary: { data: { data: Buffer.from(csv, 'utf8').toString('base64'), mimeType: 'text/csv', fileName } } }];\n"
+      },
+      "id": "build_export_csv",
+      "name": "Build Export CSV",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        1880
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendDocument",
+        "chatId": "={{ $json.chatId }}",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "additionalFields": {
+          "caption": "Экспорт базы пользователей CH-spa",
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "send_export_csv",
+      "name": "Send Export CSV",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        1880
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst store = $getWorkflowStaticData('global');\nconst users = Object.values(store.users || {});\nconst raw = $json.message.text || '';\nconst text = raw.replace(/^\\/broadcast\\s*/i, '').trim();\nif (!text) return [];\nreturn users.filter(u => u.chatId).map(u => ({ json: { chatId: u.chatId, text } }));\n"
+      },
+      "id": "build_broadcast_items",
+      "name": "Build Broadcast Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        2000
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "broadcast_message",
+      "name": "Broadcast Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        2000
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst store = $getWorkflowStaticData('global');\nconst users = Object.values(store.users || {});\nconst submissions = Object.values(store.submissions || {});\nconst byState = users.reduce((acc,u)=>{const k=u.state||'unknown'; acc[k]=(acc[k]||0)+1; return acc;}, {});\nconst text = '<b>Статистика CH-spa</b>\\n\\n' +\n'Пользователи: <b>' + users.length + '</b>\\n' +\n'Заявки: <b>' + submissions.length + '</b>\\n\\n' +\nObject.entries(byState).map(([k,v]) => '• ' + k + ': ' + v).join('\\n');\nreturn [{ json: { chatId: $json.message.chat.id, text } }];\n"
+      },
+      "id": "build_admin_stats",
+      "name": "Build Admin Stats",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        2120
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "send_admin_stats",
+      "name": "Send Admin Stats",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        2120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst store = $getWorkflowStaticData('global');\nconst raw = $json.message.text || '';\nconst parts = raw.trim().split(/\\s+/);\nconst lookup = parts[1] || '';\nconst user = (store.users || {})[String(lookup)];\nlet text = '';\nif (!lookup) text = 'Использование: /user 123456789';\nelse if (!user) text = 'Пользователь не найден.';\nelse text = '<b>Пользователь</b>\\n\\nchatId: <code>' + user.chatId + '</code>\\nusername: ' + (user.username || '-') + '\\nstate: <b>' + (user.state || '-') + '</b>\\nphone: ' + (user.phone || '-') + '\\npackage: ' + (user.selectedLevelLabel || '-') + '\\ncreatedAt: ' + (user.createdAt || '-');\nreturn [{ json: { chatId: $json.message.chat.id, text } }];\n"
+      },
+      "id": "build_user_lookup",
+      "name": "Build User Lookup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        2240
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "send_user_lookup",
+      "name": "Send User Lookup",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        2240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const store = $getWorkflowStaticData('global');\nstore.users = store.users || {};\nconst chatId = $json.callback_query?.message?.chat?.id || $json.message?.chat?.id;\nconst key = String(chatId);\nconst user = store.users[key] || { chatId };\nuser.previousState = user.state || 'purchase_approved';\nuser.state = 'awaiting_marketplace';\nuser.currentFlow = 'review';\nuser.stepLabel = 'Выбор маркетплейса';\nuser.updatedAt = new Date().toISOString();\nstore.users[key] = user;\nreturn [{ json: { chatId } }];"
+      },
+      "id": "4f812e86-a335-47c1-b1d8-f4cd3eb5992e",
+      "name": "Set Awaiting Marketplace",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        2480
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ 'Выбери маркетплейс, где ты оставила отзыв 👇' }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "WB",
+                    "additionalFields": {
+                      "callback_data": "MARKETPLACE_WB"
+                    }
+                  },
+                  {
+                    "text": "Ozon",
+                    "additionalFields": {
+                      "callback_data": "MARKETPLACE_OZON"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Яндекс Маркет",
+                    "additionalFields": {
+                      "callback_data": "MARKETPLACE_YM"
+                    }
+                  },
+                  {
+                    "text": "Другое",
+                    "additionalFields": {
+                      "callback_data": "MARKETPLACE_OTHER"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "01a3ef6b-59dd-4f39-8995-f87936594aaa",
+      "name": "Send Marketplace Step",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        2480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const store = $getWorkflowStaticData('global');\nstore.users = store.users || {};\nstore.reviewSubmissions = store.reviewSubmissions || {};\nconst cb = $json.callback_query?.data || '';\nconst map = {\n  MARKETPLACE_WB: { key:'wb', label:'Wildberries' },\n  MARKETPLACE_OZON: { key:'ozon', label:'Ozon' },\n  MARKETPLACE_YM: { key:'ym', label:'Яндекс Маркет' },\n  MARKETPLACE_OTHER: { key:'other', label:'Другое' }\n};\nconst selected = map[cb];\nif (!selected) throw new Error('Marketplace not selected');\nconst chatId = $json.callback_query.message.chat.id;\nconst key = String(chatId);\nconst reviewId = 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);\nstore.reviewSubmissions[reviewId] = {\n  reviewId,\n  telegramChatId: chatId,\n  marketplaceKey: selected.key,\n  marketplaceLabel: selected.label,\n  reviewScreenshotFileIds: [],\n  productPhotoFileIds: [],\n  status: 'draft',\n  createdAt: new Date().toISOString()\n};\nconst user = store.users[key] || { chatId };\nuser.currentReviewId = reviewId;\nuser.previousState = user.state || 'awaiting_marketplace';\nuser.state = 'awaiting_review_screenshot';\nuser.currentFlow = 'review';\nuser.updatedAt = new Date().toISOString();\nstore.users[key] = user;\nreturn [{ json: { chatId, reviewId, marketplaceKey: selected.key, marketplaceLabel: selected.label } }];"
+      },
+      "id": "24b3cba3-024b-4856-9b43-13d649c72499",
+      "name": "Save Marketplace",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        2600
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ 'Пришли скрин опубликованного отзыва.' }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "36faed2e-1876-489e-9b2d-eb58ab19e0f8",
+      "name": "Send Review Screenshot Step",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        2600
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const store = $getWorkflowStaticData('global');\nstore.users = store.users || {};\nstore.reviewSubmissions = store.reviewSubmissions || {};\nconst chatId = $json.message.chat.id;\nconst photos = $json.message.photo || [];\nconst bestPhoto = photos[photos.length - 1];\nif (!bestPhoto) throw new Error('Screenshot not found');\nconst user = store.users[String(chatId)] || {};\nconst reviewId = user.currentReviewId;\nif (!reviewId || !store.reviewSubmissions[reviewId]) throw new Error('Review submission not found');\nstore.reviewSubmissions[reviewId].reviewScreenshotFileIds.push(bestPhoto.file_id);\nuser.previousState = user.state || 'awaiting_review_screenshot';\nuser.state = 'awaiting_review_product_photo';\nuser.updatedAt = new Date().toISOString();\nstore.users[String(chatId)] = user;\nreturn [{ json: { chatId, reviewId, screenshotFileId: bestPhoto.file_id } }];"
+      },
+      "id": "a2206e05-798c-4a08-9b0c-dde211ce9157",
+      "name": "Save Review Screenshot",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        2720
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ 'Теперь пришли фото товара для бонуса за отзыв.' }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "fa6698ec-bfe1-4938-aa9c-0090d2927f01",
+      "name": "Send Review Product Photo Step",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        2720
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const store = $getWorkflowStaticData('global');\nstore.users = store.users || {};\nstore.reviewSubmissions = store.reviewSubmissions || {};\nconst chatId = $json.message.chat.id;\nconst photos = $json.message.photo || [];\nconst bestPhoto = photos[photos.length - 1];\nif (!bestPhoto) throw new Error('Product photo not found');\nconst user = store.users[String(chatId)] || {};\nconst reviewId = user.currentReviewId;\nif (!reviewId || !store.reviewSubmissions[reviewId]) throw new Error('Review submission not found');\nstore.reviewSubmissions[reviewId].productPhotoFileIds.push(bestPhoto.file_id);\nstore.reviewSubmissions[reviewId].status = 'submitted';\nstore.reviewSubmissions[reviewId].submittedAt = new Date().toISOString();\nuser.previousState = user.state || 'awaiting_review_product_photo';\nuser.state = 'waiting_review_review';\nuser.updatedAt = new Date().toISOString();\nstore.users[String(chatId)] = user;\nreturn [{ json: { chatId, reviewId, productPhotoFileId: bestPhoto.file_id, marketplaceLabel: store.reviewSubmissions[reviewId].marketplaceLabel } }];"
+      },
+      "id": "a0f336fd-c5e8-4704-8ace-cfb97d47fafd",
+      "name": "Save Review Product Photo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        2840
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ 'Материалы по отзыву отправлены менеджеру на проверку. Обычно это занимает до 30 минут.' }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "7716496d-6bec-4a1a-8862-040186a18dd9",
+      "name": "Send User Waiting Review",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        2840
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendPhoto",
+        "chatId": "=-1003989386408",
+        "file": "={{ $json.productPhotoFileId }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "✅ Одобрить отзыв",
+                    "additionalFields": {
+                      "callback_data": "={{ 'APPROVE_REVIEW|' + $json.reviewId }}"
+                    }
+                  },
+                  {
+                    "text": "❌ Отклонить отзыв",
+                    "additionalFields": {
+                      "callback_data": "={{ 'REJECT_REVIEW|' + $json.reviewId }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "caption": "={{ '<b>Новый отзыв CH-spa</b>\\nReview ID: <code>' + $json.reviewId + '</code>\\nМаркетплейс: <b>' + $json.marketplaceLabel + '</b>' }}",
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "6e5dc53e-e7f9-4760-bc07-61bee281e7bd",
+      "name": "Send Review Submission To Managers",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        2960
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const store = $getWorkflowStaticData('global');\nstore.users = store.users || {};\nstore.reviewSubmissions = store.reviewSubmissions || {};\nconst data = $json.callback_query?.data || '';\nconst reviewId = data.split('|')[1];\nconst review = store.reviewSubmissions[reviewId];\nconst reviewerId = String($json.callback_query?.from?.id || '');\nif (reviewerId !== '7260765133') return [{json:{chatId:$json.callback_query.message.chat.id,text:'Недостаточно прав.'}}];\nif (!review) return [{json:{chatId:$json.callback_query.message.chat.id,text:'Review не найден.'}}];\nreview.status='approved';\nreview.reviewedAt=new Date().toISOString();\nconst user = store.users[String(review.telegramChatId)] || { chatId: review.telegramChatId };\nuser.previousState = user.state || 'waiting_review_review';\nuser.state='review_approved';\nuser.updatedAt=new Date().toISOString();\nstore.users[String(review.telegramChatId)] = user;\nreturn [{json:{chatId:review.telegramChatId,text:'<b>Спасибо за отзыв 💛</b>\\n\\nМы проверили материалы и одобрили дополнительный бонус.\\n\\nПодарок уже открыт 🎁'}}];"
+      },
+      "id": "b58f04f5-84c6-4e0f-b1af-80741a76fd51",
+      "name": "Resolve Review Approve",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        3080
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "5c344323-e29d-41dd-be4f-932d42cfed96",
+      "name": "Send Review Approved Bonus",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        3080
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const store = $getWorkflowStaticData('global');\nstore.users = store.users || {};\nstore.reviewSubmissions = store.reviewSubmissions || {};\nconst data = $json.callback_query?.data || '';\nconst reviewId = data.split('|')[1];\nconst review = store.reviewSubmissions[reviewId];\nconst reviewerId = String($json.callback_query?.from?.id || '');\nif (reviewerId !== '7260765133') return [{json:{chatId:$json.callback_query.message.chat.id,text:'Недостаточно прав.'}}];\nif (!review) return [{json:{chatId:$json.callback_query.message.chat.id,text:'Review не найден.'}}];\nreview.status='rejected';\nreview.reviewedAt=new Date().toISOString();\nconst user = store.users[String(review.telegramChatId)] || { chatId: review.telegramChatId };\nuser.previousState = user.state || 'waiting_review_review';\nuser.state='review_rejected';\nuser.updatedAt=new Date().toISOString();\nstore.users[String(review.telegramChatId)] = user;\nreturn [{json:{chatId:review.telegramChatId,text:'Пока не можем подтвердить отзыв.\\n\\nНажми <b>⬅️ Назад</b>, чтобы вернуться и отправить материалы заново.'}}];"
+      },
+      "id": "01747945-cf61-48b1-92cd-958c695e1824",
+      "name": "Resolve Review Reject",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        3200
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "d21c3fcd-1cd6-4fe6-a041-4b12d1f7e84e",
+      "name": "Send Review Reject Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        3200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $node[\"App Config\"].json.SUPABASE_REST_URL + '/users?on_conflict=telegram_user_id' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ String($node[\"App Config\"].json.SUPABASE_SERVICE_ROLE_KEY || \"\").trim() }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ \"Bearer \" + String($node[\"App Config\"].json.SUPABASE_SERVICE_ROLE_KEY || \"\").trim() }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {},
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ [ $json.crm ] }}"
+      },
+      "id": "1f70e8e3-9a95-4192-91cc-0b69e53238ff",
+      "name": "Supabase Upsert User",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1620,
+        40
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $node[\"App Config\"].json.SUPABASE_REST_URL + '/purchase_submissions' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ String($node[\"App Config\"].json.SUPABASE_SERVICE_ROLE_KEY || \"\").trim() }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ \"Bearer \" + String($node[\"App Config\"].json.SUPABASE_SERVICE_ROLE_KEY || \"\").trim() }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {},
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ [ {\n  telegram_user_id: $json.userChatId || $json.chatId || $json.message?.from?.id,\n  telegram_chat_id: $json.userChatId || $json.chatId || $json.message?.chat?.id,\n  package_key: $json.levelKey || $json.selectedLevelKey || 'standard',\n  package_label: $json.levelLabel || $json.selectedLevelLabel || 'unknown',\n  gift_value: $json.giftValue || 0,\n  status: 'pending',\n  proof_photo_file_ids: [$json.photoFileId || $json.message?.photo?.slice(-1)[0]?.file_id || $json.message?.document?.file_id].filter(Boolean),\n  proof_photo_count: 1,\n  submitted_at: new Date().toISOString()\n} ] }}"
+      },
+      "id": "7a942cf0-9085-45e4-961c-7e6ea2c4c19f",
+      "name": "Supabase Insert Purchase Submission",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1620,
+        240
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $node[\"App Config\"].json.SUPABASE_REST_URL + '/users?telegram_user_id=eq.' + ($json.userChatId || $json.chatId || $json.message?.from?.id) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ String($node[\"App Config\"].json.SUPABASE_SERVICE_ROLE_KEY || \"\").trim() }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ \"Bearer \" + String($node[\"App Config\"].json.SUPABASE_SERVICE_ROLE_KEY || \"\").trim() }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "options": {},
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  state: 'waiting_purchase_review',\n  previous_state: 'awaiting_purchase_photo',\n  current_flow: 'purchase',\n  selected_package_key: $json.levelKey || $json.selectedLevelKey || null,\n  selected_package_label: $json.levelLabel || $json.selectedLevelLabel || null,\n  selected_package_gift_value: $json.giftValue || 0,\n  updated_at: new Date().toISOString()\n} }}"
+      },
+      "id": "95597aa4-5af6-405c-8e38-1750b2c04604",
+      "name": "Supabase Update User Purchase Pending",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1880,
+        240
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $node[\"App Config\"].json.SUPABASE_REST_URL + '/events' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ String($node[\"App Config\"].json.SUPABASE_SERVICE_ROLE_KEY || \"\").trim() }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ \"Bearer \" + String($node[\"App Config\"].json.SUPABASE_SERVICE_ROLE_KEY || \"\").trim() }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {},
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ [ {\n  telegram_user_id: $json.userChatId || $json.chatId || $json.message?.from?.id || $json.callback_query?.from?.id || null,\n  telegram_chat_id: $json.userChatId || $json.chatId || $json.message?.chat?.id || $json.callback_query?.message?.chat?.id || null,\n  event_type: $json.event_type || 'telegram_event',\n  event_source: 'n8n',\n  payload: $json\n} ] }}"
+      },
+      "id": "4037e6ce-10b0-42ef-82f9-f8ad89250afa",
+      "name": "Supabase Insert Event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2140,
+        240
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "build_upsell_offer",
+      "name": "Build Upsell Offer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        1040
+      ],
+      "parameters": {
+        "jsCode": "\nconst store = $getWorkflowStaticData('global');\nstore.users = store.users || {};\nconst chatId = $json.userChatId || $json.chatId;\nconst key = String(chatId);\nconst user = store.users[key] || { chatId };\nuser.previousState = user.state || 'purchase_approved';\nuser.state = 'upsell_offer';\nuser.stepLabel = 'Предложен апселл';\nuser.updatedAt = new Date().toISOString();\nstore.users[key] = user;\n\nreturn [{\n  json: {\n    chatId,\n    text: '🔥 <b>Спецпредложение только сейчас</b>\\n\\nДобавь набор CH-spa по спеццене <b>' + ($node[\"App Config\"].json.UPSELL_STANDARD_PRICE_LABEL || '1990 ₽') + '</b>.\\n\\nПосле оплаты всё подтвердится автоматически.'\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "send_upsell_offer",
+      "name": "Send Upsell Offer",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1740,
+        1040
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🔥 Оплатить апгрейд",
+                    "additionalFields": {
+                      "callback_data": "UPSELL_YES"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "❌ Нет, спасибо",
+                    "additionalFields": {
+                      "callback_data": "UPSELL_NO"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      }
+    },
+    {
+      "id": "resolve_upsell_yes",
+      "name": "Resolve Upsell Yes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        2480
+      ],
+      "parameters": {
+        "jsCode": "\nconst store = $getWorkflowStaticData('global');\nstore.users = store.users || {};\nconst chatId = $json.callback_query?.message?.chat?.id || $json.message?.chat?.id;\nconst userId = $json.callback_query?.from?.id || $json.message?.from?.id || chatId;\nconst key = String(chatId);\nconst user = store.users[key] || { chatId };\nuser.previousState = user.state || 'upsell_offer';\nuser.state = 'waiting_payment';\nuser.stepLabel = 'Ожидаем оплату апселла';\nuser.updatedAt = new Date().toISOString();\nstore.users[key] = user;\n\nreturn [{\n  json: {\n    chatId,\n    telegram_user_id: userId,\n    telegram_chat_id: chatId,\n    package_key: $node[\"App Config\"].json.UPSELL_STANDARD_KEY || 'upsell_standard',\n    package_label: $node[\"App Config\"].json.UPSELL_STANDARD_LABEL || 'Апгрейд CH-spa',\n    amount: Number($node[\"App Config\"].json.UPSELL_STANDARD_AMOUNT || 1990),\n    currency: $node[\"App Config\"].json.PAYMENT_CURRENCY || 'RUB',\n    payment_type: 'upsell',\n    flow_type: 'upsell',\n    event_type: 'payment_pending'\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "send_upsell_payment",
+      "name": "Send Upsell Payment",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        3320,
+        2520
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ '💳 Оплата готова\\n\\nНажми кнопку ниже, чтобы перейти к оплате. После успешной оплаты всё подтвердится автоматически.' }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "💳 Оплатить сейчас",
+                    "additionalFields": {
+                      "url": "={{ $json.confirmation_url || $json.paymentUrl }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      }
+    },
+    {
+      "id": "resolve_upsell_no",
+      "name": "Resolve Upsell No",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        2600
+      ],
+      "parameters": {
+        "jsCode": "\nconst store = $getWorkflowStaticData('global');\nstore.users = store.users || {};\nconst chatId = $json.callback_query?.message?.chat?.id || $json.message?.chat?.id;\nconst key = String(chatId);\nconst user = store.users[key] || { chatId };\nuser.previousState = user.state || 'upsell_offer';\nuser.state = 'upsell_declined';\nuser.stepLabel = 'Апселл отклонён';\nuser.updatedAt = new Date().toISOString();\nstore.users[key] = user;\n\nreturn [{\n  json: {\n    chatId,\n    text: 'Хорошо 🤍\\n\\nЕсли захочешь вернуться к спецпредложению позже, напиши менеджеру или следи за следующими сообщениями.'\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "send_upsell_no",
+      "name": "Send Upsell No",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        2600
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      }
+    },
+    {
+      "id": "warmup_cron",
+      "name": "Warmup Cron",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        260,
+        2480
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "build_warmup_queue",
+      "name": "Build Warmup Queue",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        2480
+      ],
+      "parameters": {
+        "jsCode": "\nconst store = $getWorkflowStaticData('global');\nstore.users = store.users || {};\nconst now = Date.now();\n\nconst itemsOut = Object.values(store.users)\n  .filter(user => user && user.chatId && !['purchase_approved','review_approved','closed'].includes(user.state))\n  .map(user => {\n    const updated = new Date(user.updatedAt || user.lastSeenAt || user.createdAt || Date.now()).getTime();\n    const diffMinutes = (now - updated) / 1000 / 60;\n    let followupType = '';\n\n    if ((user.state === 'awaiting_subscription') && diffMinutes > 15) followupType = 'subscription';\n    else if ((user.state === 'awaiting_contact') && diffMinutes > 20) followupType = 'contact';\n    else if ((user.state === 'awaiting_package') && diffMinutes > 20) followupType = 'package';\n    else if ((user.state === 'awaiting_photo' || user.state === 'awaiting_purchase_photo') && diffMinutes > 40) followupType = 'photo';\n    else if ((user.state === 'awaiting_review_screenshot') && diffMinutes > 1440) followupType = 'review';\n    else if ((user.state === 'upsell_offer' || user.state === 'upsell_waiting') && diffMinutes > 120) followupType = 'upsell';\n\n    return followupType ? { json: { chatId: user.chatId, state: user.state, followupType } } : null;\n  })\n  .filter(Boolean);\n\nreturn itemsOut;\n"
+      }
+    },
+    {
+      "id": "warmup_router",
+      "name": "Warmup Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        740,
+        2480
+      ],
+      "parameters": {
+        "mode": "expression",
+        "numberOutputs": 6,
+        "output": "={{ (() => { const t = $json.followupType || ''; if (t === 'subscription') return 0; if (t === 'contact') return 1; if (t === 'package') return 2; if (t === 'photo') return 3; if (t === 'review') return 4; return 5; })() }}"
+      }
+    },
+    {
+      "id": "send_followup_subscription",
+      "name": "Send Followup Subscription",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        2360
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "Ты почти забрала подарок 🎁\\n\\nОстался один шаг — подпишись на группу, чтобы открыть доступ.",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      }
+    },
+    {
+      "id": "send_followup_contact",
+      "name": "Send Followup Contact",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        2420
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "Остался один шаг 👇\\n\\nНужно оставить номер, чтобы закрепить подарок за тобой 🎁",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      }
+    },
+    {
+      "id": "send_followup_package",
+      "name": "Send Followup Package",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        2480
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "Ты не выбрала пакет 👀\\n\\nОт этого зависит размер твоего подарка 🎁",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      }
+    },
+    {
+      "id": "send_followup_photo",
+      "name": "Send Followup Photo",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        2540
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "Мы ещё не получили фото 👀\\n\\nБез него не сможем подтвердить покупку и открыть бонусы.",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      }
+    },
+    {
+      "id": "send_followup_review",
+      "name": "Send Followup Review",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        2600
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "Ты можешь получить ещё один подарок 🎁\\n\\nОставь отзыв и забери дополнительный бонус.",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      }
+    },
+    {
+      "id": "send_followup_upsell",
+      "name": "Send Followup Upsell",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        2660
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "Ты не успела забрать апселл 👀\\n\\nСпецпредложение ещё доступно — можно вернуться к нему прямо сейчас.",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $node[\"App Config\"].json.SUPABASE_REST_URL + '/payments' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ String($node[\"App Config\"].json.SUPABASE_SERVICE_ROLE_KEY || \"\").trim() }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ \"Bearer \" + String($node[\"App Config\"].json.SUPABASE_SERVICE_ROLE_KEY || \"\").trim() }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ [ { telegram_user_id: $json.telegram_user_id, telegram_chat_id: $json.telegram_chat_id, payment_type: $json.payment_type, flow_type: $json.flow_type, package_key: $json.package_key, package_label: $json.package_label, provider: ($node[\"App Config\"].json.PAYMENT_PROVIDER || 'yookassa'), amount: $json.amount, currency: $json.currency, status: 'created', metadata: { source: 'n8n_v3', chatId: $json.chatId } } ] }}"
+      },
+      "id": "cad7aa36-c448-4a99-95ea-861f8b25f5eb",
+      "name": "Supabase Insert Payment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1880,
+        2520
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.yookassa.ru/v3/payments",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Idempotence-Key",
+              "value": "={{ $execution.id + '-' + Date.now() }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ 'Basic ' + Buffer.from(($node[\"App Config\"].json.YOOKASSA_SHOP_ID || '') + ':' + ($node[\"App Config\"].json.YOOKASSA_SECRET_KEY || '')).toString('base64') }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ { amount: { value: ($json.amount / 100).toFixed(2), currency: $json.currency }, capture: true, confirmation: { type: 'redirect', return_url: $node[\"App Config\"].json.PAYMENT_RETURN_URL }, description: 'CH-spa ' + $json.package_label, metadata: { telegram_user_id: String($json.telegram_user_id), telegram_chat_id: String($json.telegram_chat_id), package_key: $json.package_key } } }}"
+      },
+      "id": "ab32776f-1b15-4f2e-a503-7b85a28a002f",
+      "name": "YooKassa Create Payment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2120,
+        2520
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst row = Array.isArray($items('Supabase Insert Payment', 0, 0)?.[0]?.json) ? $items('Supabase Insert Payment', 0, 0)[0].json[0] : ($items('Supabase Insert Payment', 0, 0)?.[0]?.json?.[0] || $items('Supabase Insert Payment', 0, 0)?.[0]?.json || {});\nconst provider = $json;\nreturn [{\n  json: {\n    payment_row_id: row.id || row[0]?.id || null,\n    telegram_user_id: row.telegram_user_id || $item(0).$node['Resolve Upsell Yes'].json.telegram_user_id,\n    telegram_chat_id: row.telegram_chat_id || $item(0).$node['Resolve Upsell Yes'].json.telegram_chat_id,\n    package_key: row.package_key || $item(0).$node['Resolve Upsell Yes'].json.package_key,\n    package_label: row.package_label || $item(0).$node['Resolve Upsell Yes'].json.package_label,\n    amount: row.amount || $item(0).$node['Resolve Upsell Yes'].json.amount,\n    provider_payment_id: provider.id || '',\n    provider_status: provider.status || 'pending',\n    confirmation_url: provider.confirmation?.confirmation_url || '',\n    return_url: $node[\"App Config\"].json.PAYMENT_RETURN_URL,\n    event_type: 'payment_pending'\n  }\n}];\n"
+      },
+      "id": "1f50f287-ff53-47c1-afe3-fae033e64cbc",
+      "name": "Build Payment Pending Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2360,
+        2520
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $node[\"App Config\"].json.SUPABASE_REST_URL + '/payments?id=eq.' + $json.payment_row_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ String($node[\"App Config\"].json.SUPABASE_SERVICE_ROLE_KEY || \"\").trim() }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ \"Bearer \" + String($node[\"App Config\"].json.SUPABASE_SERVICE_ROLE_KEY || \"\").trim() }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ { provider_payment_id: $json.provider_payment_id, provider_status: $json.provider_status, confirmation_url: $json.confirmation_url, return_url: $json.return_url, status: 'pending', metadata: { provider_payment_id: $json.provider_payment_id, confirmation_url: $json.confirmation_url } } }}"
+      },
+      "id": "dd83444e-ca49-4a5b-b043-c55dc2573150",
+      "name": "Supabase Update Payment Pending",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2600,
+        2520
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $node[\"App Config\"].json.SUPABASE_REST_URL + '/users?telegram_user_id=eq.' + $json.telegram_user_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ String($node[\"App Config\"].json.SUPABASE_SERVICE_ROLE_KEY || \"\").trim() }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ \"Bearer \" + String($node[\"App Config\"].json.SUPABASE_SERVICE_ROLE_KEY || \"\").trim() }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ { state: 'waiting_payment', payment_state: 'waiting_payment', upsell_offered: true, upsell_clicked: true, updated_at: new Date().toISOString() } }}"
+      },
+      "id": "0149f2ff-87f4-481e-891a-04856f4b144c",
+      "name": "Supabase Update User Waiting Payment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2840,
+        2520
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $node[\"App Config\"].json.SUPABASE_REST_URL + '/events' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ String($node[\"App Config\"].json.SUPABASE_SERVICE_ROLE_KEY || \"\").trim() }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ \"Bearer \" + String($node[\"App Config\"].json.SUPABASE_SERVICE_ROLE_KEY || \"\").trim() }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ [ { telegram_user_id: $json.telegram_user_id, telegram_chat_id: $json.telegram_chat_id, event_type: 'payment_pending', event_source: 'payments_v3', payload: { package_key: $json.package_key, provider_payment_id: $json.provider_payment_id, amount: $json.amount } } ] }}"
+      },
+      "id": "7023bc48-facf-45e0-b4e3-487ceb2ec5c7",
+      "name": "Supabase Insert Event Payment Pending",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3080,
+        2520
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ch-spa-payment-webhook",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "1dd35939-59d4-4424-89f3-751b5fb49240",
+      "name": "Payment Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        260,
+        2760
+      ],
+      "webhookId": "801953a7-002b-4d6f-9884-82c0575c6be2"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst body = $json;\nconst event = body.event || '';\nconst object = body.object || {};\nreturn [{\n  json: {\n    raw: body,\n    provider: 'yookassa',\n    webhook_event: event,\n    provider_payment_id: object.id || '',\n    provider_status: object.status || '',\n    paid: event === 'payment.succeeded',\n    amount_minor: object.amount?.value ? Math.round(Number(object.amount.value) * 100) : 0,\n    telegram_user_id: Number(object.metadata?.telegram_user_id || 0),\n    telegram_chat_id: Number(object.metadata?.telegram_chat_id || 0),\n    package_key: object.metadata?.package_key || ''\n  }\n}];\n"
+      },
+      "id": "67773acf-6be5-4b81-8574-c3629dc53e48",
+      "name": "Parse Payment Webhook",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        2760
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "expression",
+        "numberOutputs": 2,
+        "output": "={{ $json.paid === true ? 0 : 1 }}"
+      },
+      "id": "00b77508-5107-47bc-b506-2362b14472aa",
+      "name": "Payment Webhook Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        740,
+        2760
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $node[\"App Config\"].json.SUPABASE_REST_URL + '/payments?provider_payment_id=eq.' + $json.provider_payment_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ String($node[\"App Config\"].json.SUPABASE_SERVICE_ROLE_KEY || \"\").trim() }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ \"Bearer \" + String($node[\"App Config\"].json.SUPABASE_SERVICE_ROLE_KEY || \"\").trim() }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ { status: 'paid', provider_status: $json.provider_status, paid_at: new Date().toISOString(), metadata: $json.raw } }}"
+      },
+      "id": "bd7c2ced-559b-4dff-84b0-cf9223d55424",
+      "name": "Supabase Update Payment Paid",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        980,
+        2700
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $node[\"App Config\"].json.SUPABASE_REST_URL + '/users?telegram_user_id=eq.' + $json.telegram_user_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ String($node[\"App Config\"].json.SUPABASE_SERVICE_ROLE_KEY || \"\").trim() }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ \"Bearer \" + String($node[\"App Config\"].json.SUPABASE_SERVICE_ROLE_KEY || \"\").trim() }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ { state: 'paid', payment_state: 'paid', upsell_paid: true, updated_at: new Date().toISOString() } }}"
+      },
+      "id": "4a18340b-0a44-4c20-9aaa-fc6be2931d5b",
+      "name": "Supabase Update User Paid",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1220,
+        2700
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $node[\"App Config\"].json.SUPABASE_REST_URL + '/events' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ String($node[\"App Config\"].json.SUPABASE_SERVICE_ROLE_KEY || \"\").trim() }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ \"Bearer \" + String($node[\"App Config\"].json.SUPABASE_SERVICE_ROLE_KEY || \"\").trim() }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ [ { telegram_user_id: $json.telegram_user_id, telegram_chat_id: $json.telegram_chat_id, event_type: 'payment_paid', event_source: 'payment_webhook_v3', payload: { provider_payment_id: $json.provider_payment_id, package_key: $json.package_key, amount: $json.amount_minor } } ] }}"
+      },
+      "id": "9de13e6a-18f5-4b2d-8eaa-b31f63a8c6b8",
+      "name": "Supabase Insert Event Payment Paid",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1460,
+        2700
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.telegram_chat_id }}",
+        "text": "={{ '✅ Оплата подтверждена\\n\\nСпасибо! Апгрейд активирован. Бонусы и следующий шаг уже доступны.' }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "68ec33f7-ee2d-4d36-a1d4-105be3d5b056",
+      "name": "Send Payment Success",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1700,
+        2700
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $node[\"App Config\"].json.SUPABASE_REST_URL + '/payments?provider_payment_id=eq.' + $json.provider_payment_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ String($node[\"App Config\"].json.SUPABASE_SERVICE_ROLE_KEY || \"\").trim() }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ \"Bearer \" + String($node[\"App Config\"].json.SUPABASE_SERVICE_ROLE_KEY || \"\").trim() }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ { status: 'failed', provider_status: $json.provider_status, metadata: $json.raw } }}"
+      },
+      "id": "4816614b-d172-48f5-9803-dff647574758",
+      "name": "Supabase Update Payment Failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        980,
+        2820
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $node[\"App Config\"].json.SUPABASE_REST_URL + '/events' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ String($node[\"App Config\"].json.SUPABASE_SERVICE_ROLE_KEY || \"\").trim() }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ \"Bearer \" + String($node[\"App Config\"].json.SUPABASE_SERVICE_ROLE_KEY || \"\").trim() }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ [ { telegram_user_id: $json.telegram_user_id, telegram_chat_id: $json.telegram_chat_id, event_type: 'payment_failed', event_source: 'payment_webhook_v3', payload: { provider_payment_id: $json.provider_payment_id, provider_status: $json.provider_status } } ] }}"
+      },
+      "id": "96921963-7457-49a2-9560-027ccea6700e",
+      "name": "Supabase Insert Event Payment Failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1220,
+        2820
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const store = $getWorkflowStaticData('global');\nstore.users = store.users || {};\nstore.submissions = store.submissions || {};\n\nconst submissionId = $json.submissionId;\nif (!submissionId) {\n  throw new Error('submissionId not found');\n}\n\nconst submission = store.submissions[submissionId] || {\n  submissionId,\n  userChatId: $json.userChatId,\n  levelKey: $json.levelKey,\n  levelLabel: $json.levelLabel,\n  giftValue: $json.giftValue || 0,\n  phone: $json.phone || '',\n  photoFileId: $json.photoFileId || '',\n  status: 'pending',\n  createdAt: new Date().toISOString()\n};\n\nsubmission.status = 'approved';\nsubmission.reviewedAt = new Date().toISOString();\nsubmission.reviewerId = 'auto';\nstore.submissions[submissionId] = submission;\n\nconst userKey = String(submission.userChatId);\nconst user = store.users[userKey] || { chatId: submission.userChatId };\nuser.previousState = user.state || 'waiting_purchase_review';\nuser.state = 'purchase_approved';\nuser.currentFlow = 'review';\nuser.stepLabel = 'Покупка одобрена автоматически';\nuser.giftsUnlocked = true;\nuser.lastApprovedSubmissionId = submissionId;\nuser.updatedAt = new Date().toISOString();\nstore.users[userKey] = user;\n\nconst giftsByLevel = {\n  standard: [\n    { title: '🎁 Фейсфитнес mini', url: `https://example.com/facefit?sub=${submissionId}` },\n    { title: '🎁 Йога для тела', url: `https://example.com/yoga?sub=${submissionId}` },\n    { title: '🎁 Уход и сияние', url: `https://example.com/beauty?sub=${submissionId}` }\n  ],\n  premium: [\n    { title: '💎 Пилатес Premium', url: `https://example.com/pilates?sub=${submissionId}` },\n    { title: '💎 Нутри-детокс', url: `https://example.com/nutri?sub=${submissionId}` },\n    { title: '💎 Самооценка и ресурс', url: `https://example.com/mindset?sub=${submissionId}` }\n  ],\n  vip: [\n    { title: '👑 VIP Beauty Reset', url: `https://example.com/vip-beauty?sub=${submissionId}` },\n    { title: '👑 Телесный антистресс', url: `https://example.com/body-reset?sub=${submissionId}` },\n    { title: '👑 Энергия и женственность', url: `https://example.com/woman-power?sub=${submissionId}` }\n  ]\n};\n\nreturn [{\n  json: {\n    submissionId,\n    status: submission.status,\n    userChatId: submission.userChatId,\n    giftValue: submission.giftValue || 0,\n    gifts: giftsByLevel[submission.levelKey] || [],\n    reviewOfferText: 'Хочешь получить дополнительный подарок?\\n\\nОставь отзыв на маркетплейсе и получи ещё один бонус 👇'\n  }\n}];"
+      },
+      "id": "auto_approve_purchase",
+      "name": "Auto Approve Purchase",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        860
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const chatId =\n  $json.chatId ||\n  $json.message?.chat?.id ||\n  $json.callback_query?.message?.chat?.id ||\n  $json.crm?.telegram_chat_id ||\n  null;\n\nif (!chatId) {\n  throw new Error('Contact fallback: chatId not found');\n}\n\nreturn [{\n  json: {\n    ...$json,\n    chatId,\n    text: 'Пожалуйста, нажми кнопку «📱 Отправить контакт» ниже.\\nНомер вручную вводить не нужно 👇'\n  }\n}];"
+      },
+      "id": "build_contact_required_message",
+      "name": "Build Contact Required Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "📱 Отправить контакт",
+                    "additionalFields": {
+                      "request_contact": true
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "⬅️ Назад"
+                  },
+                  {
+                    "text": "💬 Помощь"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": {
+          "resize_keyboard": true,
+          "one_time_keyboard": true
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "send_contact_required_message",
+      "name": "Send Contact Required Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const store = $getWorkflowStaticData('global');\nstore.submissions = store.submissions || {};\n\nconst submissionId = $json.submissionId || '';\nconst submission = submissionId ? store.submissions[submissionId] : null;\nconst status = String($json.status || submission?.status || '').toLowerCase();\n\nif (status !== 'approved') {\n  return [];\n}\n\nreturn [{\n  json: {\n    ...$json,\n    status: 'approved'\n  }\n}];"
+      },
+      "id": "check_purchase_approved_411c5b7d",
+      "name": "Check Purchase Approved",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1180,
+        1040
+      ]
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "App Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert User": {
+      "main": [
+        [
+          {
+            "node": "Supabase Upsert User",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Router": {
+      "main": [
+        [
+          {
+            "node": "Set Start State",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Awaiting Subscription",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Awaiting Contact",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Contact",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Package Standard",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Package Premium",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Package VIP",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Photo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resolve Approve",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resolve Reject",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set Awaiting Marketplace",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Marketplace",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Review Screenshot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Review Product Photo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resolve Review Approve",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resolve Review Reject",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Status Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Back Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Continue Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reset User State",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Help Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Export CSV",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Broadcast Items",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Admin Stats",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build User Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resolve Upsell Yes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resolve Upsell No",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Contact Required Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Start State": {
+      "main": [
+        [
+          {
+            "node": "Start Welcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Awaiting Subscription": {
+      "main": [
+        [
+          {
+            "node": "Ask Subscription",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Awaiting Contact": {
+      "main": [
+        [
+          {
+            "node": "Ask Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Contact": {
+      "main": [
+        [
+          {
+            "node": "Ask Package",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Package Standard": {
+      "main": [
+        [
+          {
+            "node": "Ask For Photo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Package Premium": {
+      "main": [
+        [
+          {
+            "node": "Ask For Photo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Package VIP": {
+      "main": [
+        [
+          {
+            "node": "Ask For Photo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Photo": {
+      "main": [
+        [
+          {
+            "node": "Prepare Submission",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Submission": {
+      "main": [
+        [
+          {
+            "node": "User Waiting",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Admin Review Photo",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Supabase Insert Purchase Submission",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Supabase Update User Purchase Pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Approve": {
+      "main": [
+        [
+          {
+            "node": "Check Purchase Approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Reject": {
+      "main": [
+        [
+          {
+            "node": "Send Reject Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Status Message": {
+      "main": [
+        [
+          {
+            "node": "Send Status Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reset User State": {
+      "main": [
+        [
+          {
+            "node": "Send Reset Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Help Message": {
+      "main": [
+        [
+          {
+            "node": "Send Help Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Continue Message": {
+      "main": [
+        [
+          {
+            "node": "Send Continue Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Back Message": {
+      "main": [
+        [
+          {
+            "node": "Send Back Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Export CSV": {
+      "main": [
+        [
+          {
+            "node": "Send Export CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Broadcast Items": {
+      "main": [
+        [
+          {
+            "node": "Broadcast Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Admin Stats": {
+      "main": [
+        [
+          {
+            "node": "Send Admin Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build User Lookup": {
+      "main": [
+        [
+          {
+            "node": "Send User Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Awaiting Marketplace": {
+      "main": [
+        [
+          {
+            "node": "Send Marketplace Step",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Marketplace": {
+      "main": [
+        [
+          {
+            "node": "Send Review Screenshot Step",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Review Screenshot": {
+      "main": [
+        [
+          {
+            "node": "Send Review Product Photo Step",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Review Product Photo": {
+      "main": [
+        [
+          {
+            "node": "Send User Waiting Review",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Review Submission To Managers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Review Approve": {
+      "main": [
+        [
+          {
+            "node": "Send Review Approved Bonus",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Review Reject": {
+      "main": [
+        [
+          {
+            "node": "Send Review Reject Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "App Config": {
+      "main": [
+        [
+          {
+            "node": "Upsert User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Upsell Offer": {
+      "main": [
+        [
+          {
+            "node": "Send Upsell Offer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Upsell Yes": {
+      "main": [
+        [
+          {
+            "node": "Supabase Insert Payment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Upsell No": {
+      "main": [
+        [
+          {
+            "node": "Send Upsell No",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Warmup Cron": {
+      "main": [
+        [
+          {
+            "node": "Build Warmup Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Warmup Queue": {
+      "main": [
+        [
+          {
+            "node": "Warmup Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Warmup Router": {
+      "main": [
+        [
+          {
+            "node": "Send Followup Subscription",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Followup Contact",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Followup Package",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Followup Photo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Followup Review",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Followup Upsell",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Insert Payment": {
+      "main": [
+        [
+          {
+            "node": "YooKassa Create Payment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YooKassa Create Payment": {
+      "main": [
+        [
+          {
+            "node": "Build Payment Pending Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Payment Pending Update": {
+      "main": [
+        [
+          {
+            "node": "Supabase Update Payment Pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Update Payment Pending": {
+      "main": [
+        [
+          {
+            "node": "Supabase Update User Waiting Payment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Update User Waiting Payment": {
+      "main": [
+        [
+          {
+            "node": "Supabase Insert Event Payment Pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Insert Event Payment Pending": {
+      "main": [
+        [
+          {
+            "node": "Send Upsell Payment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payment Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Payment Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Payment Webhook": {
+      "main": [
+        [
+          {
+            "node": "Payment Webhook Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payment Webhook Router": {
+      "main": [
+        [
+          {
+            "node": "Supabase Update Payment Paid",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Supabase Update Payment Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Update Payment Paid": {
+      "main": [
+        [
+          {
+            "node": "Supabase Update User Paid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Update User Paid": {
+      "main": [
+        [
+          {
+            "node": "Supabase Insert Event Payment Paid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Insert Event Payment Paid": {
+      "main": [
+        [
+          {
+            "node": "Send Payment Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Update Payment Failed": {
+      "main": [
+        [
+          {
+            "node": "Supabase Insert Event Payment Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto Approve Purchase": {
+      "main": [
+        [
+          {
+            "node": "Check Purchase Approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Contact Required Message": {
+      "main": [
+        [
+          {
+            "node": "Send Contact Required Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Purchase Approved": {
+      "main": [
+        [
+          {
+            "node": "Send Approved Gifts",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Upsell Offer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "f23c0859-397f-4db7-a455-835e740433cf",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "4cf22e52-6473-4133-9580-ef9d61614ae5"
+}

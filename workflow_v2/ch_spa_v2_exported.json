@@ -1,0 +1,1920 @@
+{
+  "updatedAt": "2026-05-26T20:06:48.000Z",
+  "createdAt": "2026-05-01T17:51:44.021Z",
+  "id": "oV8dWIoAUHRkLaSb",
+  "name": "CH-SPA V2",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "// NODE: App Config + Router\n// Stores config AND determines route for downstream Switch\n\nconst normalizeBaseUrl = (value) => {\n  const raw = String(value || '').trim();\n  if (!raw) return '';\n  return raw.replace(/\\/rest\\/v1\\/?$/i, '').replace(/\\/+$/, '');\n};\n\nconst supabaseUrl = normalizeBaseUrl('https://lzxdetxcipighlsyzjpi.supabase.co');\nconst supabaseKey = String('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6eGRldHhjaXBpZ2hsc3l6anBpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NzY0NjQ4MiwiZXhwIjoyMDkzMjIyNDgyfQ._QMn-mjdcDXfDH1BnuwLWZieH5gejcnAK4vkjnmRQEo').trim();\nconst botToken = String('8589709724:AAF8R-tki276jyAw69b1EhAEm2hp-5E2j_I').trim();\nconst subscriptionChannelId = String('@ch_spa').trim();\nconst managersGroupChatId = String('-1003989386408').trim();\nconst adminUserId = String('7260765133').trim();\n\nconst ykShopId = String('YOUR_YOOKASSA_SHOP_ID').trim();\nconst ykSecret = String('YOUR_YOOKASSA_SECRET_KEY').trim();\nconst paymentReturnUrl = String('https://YOUR_DOMAIN/thanks').trim();\nconst autoApproveDelayHours = 1;\n\nconst config = {\n  SUPABASE_URL: supabaseUrl,\n  SUPABASE_REST_URL: supabaseUrl ? `${supabaseUrl}/rest/v1` : '',\n  SUPABASE_SERVICE_ROLE_KEY: supabaseKey,\n  TELEGRAM_BOT_TOKEN: botToken,\n  SUPABASE_CONFIGURED: !!(\n    supabaseUrl && !supabaseUrl.includes('YOUR_PROJECT') &&\n    supabaseKey && !supabaseKey.includes('YOUR_SUPABASE')\n  ),\n  SUBSCRIPTION_CHANNEL_ID: subscriptionChannelId,\n  MANAGERS_GROUP_CHAT_ID: managersGroupChatId,\n  ADMIN_USER_ID: adminUserId,\n  PAYMENT_PROVIDER: 'yookassa',\n  YOOKASSA_SHOP_ID: ykShopId,\n  YOOKASSA_SECRET_KEY: ykSecret,\n  PAYMENT_RETURN_URL: paymentReturnUrl,\n  PAYMENT_CURRENCY: 'RUB',\n  PAYMENTS_CONFIGURED: !!(\n    ykShopId && !ykShopId.includes('YOUR_YOOKASSA') &&\n    ykSecret && !ykSecret.includes('YOUR_YOOKASSA') &&\n    paymentReturnUrl && !paymentReturnUrl.includes('YOUR_DOMAIN')\n  ),\n  AUTO_APPROVE_DELAY_HOURS: autoApproveDelayHours,\n  AUTO_APPROVE_DELAY_MS: autoApproveDelayHours * 60 * 60 * 1000,\n  FOLLOWUP_SUBSCRIPTION_HOURS: 24,\n  FOLLOWUP_CONTACT_HOURS: 24,\n  FOLLOWUP_PACKAGE_HOURS: 48,\n  FOLLOWUP_PHOTO_HOURS: 48,\n  FOLLOWUP_REVIEW_HOURS: 72,\n  FOLLOWUP_UPSELL_HOURS: 72,\n  WARMUP_ENABLED: true\n};\n\nconst first = $input.first();\nif (!first) { return []; }\nconst input = first.json || {};\n\n// ---- ROUTING LOGIC ----\nconst msg = input.message || {};\nconst cb  = input.callback_query || {};\nconst text = String(msg.text || '').trim();\nconst cbData = String(cb.data || '');\nconst hasPhoto = Array.isArray(msg.photo) && msg.photo.length > 0;\nconst hasDocument = !!msg.document;\nconst hasContact = !!msg.contact?.phone_number;\nconst crm = input.crm || {};\nconst state = String(crm.state || 'new');\nconst fromId = String(msg.from?.id || cb.from?.id || '');\nconst adminId = String(config.ADMIN_USER_ID || '7260765133');\n\nlet route = 0;\n\nif (text.startsWith('/start')) {\n  route = 0;\n} else if (cbData === 'START_PURCHASE' || cbData === 'START_FLOW' || text === '🎁 Получить бонусы') {\n  route = 1;\n} else if (cbData === 'SUB_CONFIRMED') {\n  route = 2;\n} else if (hasContact) {\n  route = 3;\n} else if (text === '1 варежка (3000 руб.)') {\n  route = 4;\n} else if (text === '1+2 варежки (7000 руб.)') {\n  route = 5;\n} else if (text === 'VIP: 1+2+5 варежек (11000 руб.)') {\n  route = 6;\n} else if ((hasPhoto || hasDocument) && (state === 'awaiting_photo' || state === 'awaiting_purchase_photo')) {\n  route = 7;\n} else if (cbData.startsWith('APPROVE_PURCHASE|') || cbData.startsWith('APPROVE|')) {\n  route = 8;\n} else if (cbData.startsWith('REJECT_PURCHASE|') || cbData.startsWith('REJECT|')) {\n  route = 9;\n} else if (cbData === 'START_REVIEW' || text === '⭐ Оставить отзыв') {\n  route = 10;\n} else if (['MARKETPLACE_WB', 'MARKETPLACE_OZON', 'MARKETPLACE_YM', 'MARKETPLACE_OTHER'].includes(cbData)) {\n  route = 11;\n} else if ((hasPhoto || hasDocument) && state === 'awaiting_review_screenshot') {\n  route = 12;\n} else if ((hasPhoto || hasDocument) && state === 'awaiting_review_product_photo') {\n  route = 13;\n} else if (cbData.startsWith('APPROVE_REVIEW|')) {\n  route = 14;\n} else if (cbData.startsWith('REJECT_REVIEW|')) {\n  route = 15;\n} else if (text === '📌 Мой статус' || text === '/status' || text === '📍 Мой статус') {\n  route = 16;\n} else if (cbData === 'BACK_TO_MAIN' || text === '🔙 Назад' || text === '⬅️ Назад' || text === '/back') {\n  route = 17;\n} else if (cbData === 'CONTINUE' || text === '▶️ Продолжить' || text === '/continue') {\n  route = 18;\n} else if (cbData === 'RESET_STATE' || text === '🔄 Сбросить' || text === '🔄 Начать заново' || text === '/reset') {\n  route = 19;\n} else if (cbData === 'HELP' || text === '❇️ Помощь' || text === '💬 Помощь' || text === '/help') {\n  route = 20;\n} else if ((cbData === 'ADMIN_EXPORT' || text === '/export_users') && fromId === adminId) {\n  route = 21;\n} else if (fromId === adminId && (text.startsWith('/admin') || text.startsWith('/broadcast') || text === '/stats' || text.startsWith('/user'))) {\n  route = 22;\n} else if (cbData === 'UPSELL_YES') {\n  route = 23;\n} else if (cbData === 'UPSELL_NO') {\n  route = 24;\n} else if (/^\\+?\\d[\\d\\s\\-()]{8,}$/.test(text)) {\n  route = 25;\n}\n\nreturn [{\n  json: {\n    ...input,\n    ...config,\n    app_config: config,\n    _route: route,\n    raw: input.raw || input\n  }\n}];"
+      },
+      "id": "app-config-v2",
+      "name": "App Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        496,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst input = $input.first().json;\nconsole.log(\"UPSERT_USER: input получен, ключи: \" + JSON.stringify(Object.keys(input)).substring(0,200));\nconst appConfig = input.app_config || {};\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey  = appConfig.SUPABASE_SERVICE_ROLE_KEY;\n\nconst headers = {\n  apikey: apiKey,\n  Authorization: 'Bearer ' + apiKey,\n  'Content-Type': 'application/json',\n  Prefer: 'return=representation'\n};\n\nconst msg = input.message || {};\nconst cb  = input.callback_query || {};\nconst from = msg.from || cb.from || {};\nconst telegramId = String(from.id || '');\nconst username   = from.username || '';\nconst firstName  = from.first_name || '';\nconst lastName   = from.last_name || '';\n\nif (!telegramId) {\n  return [{ json: { error: 'No telegram_id', crm: { state: 'new' } } }];\n}\n\nlet user = null;\nconst getUrl = baseUrl + '/users?telegram_id=eq.' + telegramId + '&select=*';\nconst getResp = await fetch(getUrl, { headers: headers });\nconst getData = await getResp.json();\nuser = Array.isArray(getData) ? getData[0] : getData;\n\nconst now = new Date().toISOString();\n\nif (user) {\n  await fetch(baseUrl + '/users?telegram_id=eq.' + telegramId, {\n    method: 'PATCH',\n    headers: headers,\n    body: JSON.stringify({ last_seen: now })\n  });\n} else {\n  const createResp = await fetch(baseUrl + '/users', {\n    method: 'POST',\n    headers: headers,\n    body: JSON.stringify({\n      telegram_id: telegramId,\n      username: username,\n      first_name: firstName,\n      last_name: lastName,\n      user_state: 'new',\n      bonus_access: 'locked',\n      last_seen: now\n    })\n  });\n  const createData = await createResp.json();\n  user = Array.isArray(createData) ? createData[0] : createData;\n}\n\nconst crm = {\n  telegram_id: telegramId,\n  state: user ? (user.user_state || 'new') : 'new',\n  purchase_status: user ? (user.purchase_status || null) : null,\n  bonus_access: user ? (user.bonus_access || 'locked') : 'locked',\n  selected_package: user ? (user.selected_package || null) : null,\n  phone: user ? (user.phone || null) : null,\n  username: username,\n  first_name: firstName\n};\n\nreturn [{\n  json: Object.assign({}, input, { crm: crm, user: user, telegram_id: telegramId, raw: input.raw || input })\n}];"
+      },
+      "id": "upsert-user-v2",
+      "name": "Upsert User",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javascript",
+        "jsCode": "// ROUTE GATE: only process if _route === 0\nif ($input.first().json._route !== 0) { return []; }\n\nconst input = $input.first().json;\nconst _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst crm = input.crm || {};\nconst firstName = crm.first_name || '';\nconst appConfig = input.app_config || {};\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst botToken = appConfig.TELEGRAM_BOT_TOKEN;\nconst headers = { 'apikey': apiKey, 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' };\nconst tid = crm.telegram_id;\n\nconst chatId = (input.message && input.message.chat && input.message.chat.id)\n  || (input.callback_query && input.callback_query.message && input.callback_query.message.chat && input.callback_query.message.chat.id)\n  || (input.callback_query && input.callback_query.from && input.callback_query.from.id);\n\nconsole.log('START_WELCOME: tid=' + tid + ' chatId=' + chatId + ' firstName=' + firstName);\n\ntry {\n  await fetch(baseUrl + '/users?telegram_id=eq.' + tid, {\n    method: 'PATCH', headers,\n    body: JSON.stringify({ user_state: 'new', last_seen: new Date().toISOString() })\n  });\n} catch(e) { console.log('START_WELCOME PATCH error: ' + e.message); }\n\ntry {\n  await fetch(baseUrl + '/events', {\n    method: 'POST', headers,\n    body: JSON.stringify({ user_id: tid, event_name: 'start', payload: {} })\n  });\n} catch(e) { console.log('START_WELCOME events error: ' + e.message); }\n\nconst welcomeText = 'Привет' + (firstName ? ', ' + firstName : '') + '!\\nДобро пожаловать в CH-SPA!\\n\\nПодпишитесь на наш канал и нажмите «Проверить подписку» чтобы получить бонусы.';\n\ntry {\n  const tgResp = await fetch('https://api.telegram.org/bot' + botToken + '/sendMessage', {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      chat_id: chatId,\n      text: welcomeText,\n      reply_markup: {\n        inline_keyboard: [[{ text: 'Проверить подписку', callback_data: 'SUB_CONFIRMED' }]]\n      }\n    })\n  });\n  const tgData = await tgResp.json();\n  console.log('START_WELCOME sendMessage result: ' + JSON.stringify(tgData).substring(0, 200));\n} catch(e) { console.log('START_WELCOME sendMessage ERROR: ' + e.message); }\n\nreturn [{ json: { ...input, crm: { ...crm, state: 'awaiting_subscription' } } }];\n"
+      },
+      "id": "br0-code",
+      "name": "Start Welcome",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ ($json.message || $json.callback_query.message).chat.id }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {
+          "reply_markup": "={{ $json.replyKeyboard }}"
+        }
+      },
+      "id": "br0-tg",
+      "name": "Send Start Welcome",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        208
+      ],
+      "webhookId": "deda18b8-6ec9-4b3e-bb4d-e8850c267826",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ROUTE GATE: only process if _route === 1\nif ($input.first().json._route !== 1) { return []; }\n\n\nconst input = $input.first().json;\n\n\nconst _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst crm = input.crm || {};\nconst appConfig = input.app_config;\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\nconst tid = crm.telegram_id;\n\nawait fetch(baseUrl + \"/users?telegram_id=eq.\" + tid, {\n  method: \"PATCH\", headers,\n  body: JSON.stringify({ user_state: \"awaiting_subscription\", last_seen: new Date().toISOString() })\n});\n\nconst text = \"Подпишитесь на канал @ch_spa и нажмите кнопку ниже\";\nconst kb = {\"inline_keyboard\": [[{\"text\": \"Проверить подписку\", \"callback_data\": \"SUB_CONFIRMED\"}]]};\n\nreturn [{ json: { ...input, replyText: text, replyKeyboard: kb, crm: {...crm, state: \"awaiting_subscription\"} } }];"
+      },
+      "id": "br1-code",
+      "name": "Check Subscription",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ ($json.message || $json.callback_query.message).chat.id }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {
+          "reply_markup": "={{ $json.replyKeyboard }}"
+        }
+      },
+      "id": "br1-tg",
+      "name": "Send Check Sub",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        320
+      ],
+      "webhookId": "960f5e08-6193-4a18-bfc6-f787bc237beb",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ROUTE GATE: only process if _route === 2\nif ($input.first().json._route !== 2) { return []; }\n\n\nconst input = $input.first().json;\n\n\nconst _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst crm = input.crm || {};\nconst appConfig = input.app_config;\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\nconst tid = crm.telegram_id;\n\nawait fetch(baseUrl + \"/users?telegram_id=eq.\" + tid, {\n  method: \"PATCH\", headers,\n  body: JSON.stringify({ user_state: \"awaiting_contact\", last_seen: new Date().toISOString() })\n});\nawait fetch(baseUrl + \"/events\", {\n  method: \"POST\", headers,\n  body: JSON.stringify({ user_id: tid, event_name: \"subscription_confirmed\", payload: {} })\n});\n\nconst text = \"Отлично! Теперь поделитесь номером телефона чтобы продолжить.\";\nconst kb = {\"inline_keyboard\": [[{\"text\": \"Поделиться контактом\", \"request_contact\": true, \"callback_data\": \"CONTACT_SHARED\"}]]};\n\nreturn [{ json: { ...input, replyText: text, replyKeyboard: kb, crm: {...crm, state: \"awaiting_contact\"} } }];"
+      },
+      "id": "br2-code",
+      "name": "Sub Confirmed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ ($json.message || $json.callback_query.message).chat.id }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {
+          "reply_markup": "={{ $json.replyKeyboard }}"
+        }
+      },
+      "id": "br2-tg",
+      "name": "Send Contact Request",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        448
+      ],
+      "webhookId": "630aadd3-4f38-4e13-a879-fac895f3fb25",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ROUTE GATE: only process if _route === 3\nif ($input.first().json._route !== 3) { return []; }\n\n\nconst input = $input.first().json;\n\n\nconst _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst crm = input.crm || {};\nconst phone = input.message?.contact?.phone_number || \"\";\nconst appConfig = input.app_config;\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\nconst tid = crm.telegram_id;\n\nawait fetch(baseUrl + \"/users?telegram_id=eq.\" + tid, {\n  method: \"PATCH\", headers,\n  body: JSON.stringify({ phone: phone, user_state: \"awaiting_package\", last_seen: new Date().toISOString() })\n});\nawait fetch(baseUrl + \"/events\", {\n  method: \"POST\", headers,\n  body: JSON.stringify({ user_id: tid, event_name: \"contact_saved\", payload: { phone: phone } })\n});\n\nconst text = \"Выберите ваш набор бонусов:\";\nconst kb = {\"inline_keyboard\": [[{\"text\": \"1 варежка (3000 руб.)\", \"callback_data\": \"PACKAGE_STANDARD\"}], [{\"text\": \"1+2 варежки (7000 руб.)\", \"callback_data\": \"PACKAGE_PREMIUM\"}], [{\"text\": \"VIP: 1+2+5 варежек (11000 руб.)\", \"callback_data\": \"PACKAGE_VIP\"}]]};\n\nreturn [{ json: { ...input, replyText: text, replyKeyboard: kb, crm: {...crm, state: \"awaiting_package\"} } }];"
+      },
+      "id": "br3-code",
+      "name": "Save Contact",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ ($json.message || $json.callback_query.message).chat.id }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {
+          "reply_markup": "={{ $json.replyKeyboard }}"
+        }
+      },
+      "id": "br3-tg",
+      "name": "Send Package Choice",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        560
+      ],
+      "webhookId": "2c0ba1ec-8742-4a43-a7b4-911787b8b852",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ROUTE GATE: only process if _route === 7\nif ($input.first().json._route !== 7) { return []; }\n\n\nconst input = $input.first().json;\n\n\nconst _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst crm = input.crm || {};\nconst photo = input.message?.photo;\nlet fileId = \"\";\nif (photo && Array.isArray(photo)) { fileId = photo[photo.length - 1].file_id; }\nconst appConfig = input.app_config;\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\", \"Prefer\": \"return=representation\"};\nconst tid = crm.telegram_id;\nconst pkg = crm.selected_package || \"standard\";\n\nconst resp = await fetch(baseUrl + \"/submissions\", {\n  method: \"POST\", headers,\n  body: JSON.stringify({\n    user_id: tid, package: pkg, photo_file_id: fileId,\n    purchase_status: \"pending\", timer_started_at: new Date().toISOString()\n  })\n});\n\nif (resp.status === 409) {\n  return [{ json: { ...input, replyText: \"У вас уже есть заявка на модерации. Ожидайте.\", crm } }];\n}\n\nawait fetch(baseUrl + \"/users?telegram_id=eq.\" + tid, {\n  method: \"PATCH\", headers,\n  body: JSON.stringify({ user_state: \"pending_approval\", purchase_status: \"pending\", last_seen: new Date().toISOString() })\n});\nawait fetch(baseUrl + \"/events\", {\n  method: \"POST\", headers,\n  body: JSON.stringify({ user_id: tid, event_name: \"submission_created\", payload: { file_id: fileId, package: pkg } })\n});\n\nconst delayH = appConfig.AUTO_APPROVE_DELAY_HOURS || 1;\nconst text = \"Фото получено!\\n\\nЗаявка будет одобрена автоматически через \" + delayH + \" час. Бонусы придут после одобрения.\";\n\nreturn [{ json: { ...input, replyText: text, crm: {...crm, state: \"pending_approval\", purchase_status: \"pending\"} } }];"
+      },
+      "id": "br7-code",
+      "name": "Save Photo V2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ ($json.message || $json.callback_query.message).chat.id }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {
+          "reply_markup": "={{ $json.replyKeyboard }}"
+        }
+      },
+      "id": "br7-tg",
+      "name": "Send Photo Received",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        688
+      ],
+      "webhookId": "421fabe8-b100-40ea-9499-37cf558cc89a",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ROUTE GATE: only process if _route === 4\nif ($input.first().json._route !== 4) { return []; }\n\n\nconst input = $input.first().json;\n\n\nconst _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst crm = input.crm || {};\nconst appConfig = input.app_config;\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\nconst tid = crm.telegram_id;\nawait fetch(baseUrl + \"/users?telegram_id=eq.\" + tid, {\n  method: \"PATCH\", headers,\n  body: JSON.stringify({ selected_package: \"standard\", user_state: \"awaiting_photo\", last_seen: new Date().toISOString() })\n});\nawait fetch(baseUrl + \"/events\", {\n  method: \"POST\", headers,\n  body: JSON.stringify({ user_id: tid, event_name: \"package_selected\", payload: { package: \"standard\" } })\n});\n\nconst text = \"Вы выбрали standard. Теперь загрузите фото чека.\";\nreturn [{ json: { ...input, replyText: text, crm: {...crm, state: \"awaiting_photo\", selected_package: \"standard\"} } }];"
+      },
+      "id": "br4-code",
+      "name": "Save Package Standard",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ ($json.message || $json.callback_query.message).chat.id }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {}
+      },
+      "id": "br4-tg",
+      "name": "Send Pkg Standard",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        800
+      ],
+      "webhookId": "4b93c917-be84-4d15-a11b-5448d2ba62f2",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ROUTE GATE: only process if _route === 5\nif ($input.first().json._route !== 5) { return []; }\n\n\nconst input = $input.first().json;\n\n\nconst _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst crm = input.crm || {};\nconst appConfig = input.app_config;\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\nconst tid = crm.telegram_id;\nawait fetch(baseUrl + \"/users?telegram_id=eq.\" + tid, {\n  method: \"PATCH\", headers,\n  body: JSON.stringify({ selected_package: \"premium\", user_state: \"awaiting_photo\", last_seen: new Date().toISOString() })\n});\nawait fetch(baseUrl + \"/events\", {\n  method: \"POST\", headers,\n  body: JSON.stringify({ user_id: tid, event_name: \"package_selected\", payload: { package: \"premium\" } })\n});\n\nconst text = \"Вы выбрали premium. Теперь загрузите фото чека.\";\nreturn [{ json: { ...input, replyText: text, crm: {...crm, state: \"awaiting_photo\", selected_package: \"premium\"} } }];"
+      },
+      "id": "br5-code",
+      "name": "Save Package Premium",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        928
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ ($json.message || $json.callback_query.message).chat.id }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {}
+      },
+      "id": "br5-tg",
+      "name": "Send Pkg Premium",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        928
+      ],
+      "webhookId": "0cd5c15c-493a-40c0-92d8-7dc4fcb49bb1",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ROUTE GATE: only process if _route === 6\nif ($input.first().json._route !== 6) { return []; }\n\n\nconst input = $input.first().json;\n\n\nconst _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst crm = input.crm || {};\nconst appConfig = input.app_config;\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\nconst tid = crm.telegram_id;\nawait fetch(baseUrl + \"/users?telegram_id=eq.\" + tid, {\n  method: \"PATCH\", headers,\n  body: JSON.stringify({ selected_package: \"vip\", user_state: \"awaiting_photo\", last_seen: new Date().toISOString() })\n});\nawait fetch(baseUrl + \"/events\", {\n  method: \"POST\", headers,\n  body: JSON.stringify({ user_id: tid, event_name: \"package_selected\", payload: { package: \"vip\" } })\n});\n\nconst text = \"Вы выбрали vip. Теперь загрузите фото чека.\";\nreturn [{ json: { ...input, replyText: text, crm: {...crm, state: \"awaiting_photo\", selected_package: \"vip\"} } }];"
+      },
+      "id": "br6-code",
+      "name": "Save Package VIP",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        1040
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ ($json.message || $json.callback_query.message).chat.id }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {}
+      },
+      "id": "br6-tg",
+      "name": "Send Pkg VIP",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        1040
+      ],
+      "webhookId": "8a63f393-11a6-4723-ac3e-4c32df511888",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ROUTE GATE: only process if _route === 16\nif ($input.first().json._route !== 16) { return []; }\n\n\nconst input = $input.first().json;\n\n\nconst _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst crm = input.crm || {};\nconst appConfig = input.app_config;\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\nconst tid = crm.telegram_id;\nconst resp = await fetch(baseUrl + \"/users?telegram_id=eq.\" + tid + \"&select=user_state,selected_package,purchase_status,bonus_access\");\nconst data = await resp.json();\nconst user = Array.isArray(data) ? data[0] : data;\n\nlet text = \"Ваш статус:\\n\";\ntext += \"Состояние: \" + (user?.user_state || \"неизвестно\") + \"\\n\";\nif (user?.selected_package) text += \"Пакет: \" + user.selected_package + \"\\n\";\nif (user?.purchase_status) text += \"Заявка: \" + user.purchase_status + \"\\n\";\ntext += \"Бонусы: \" + (user?.bonus_access === \"unlocked\" ? \"доступны\" : \"заблокированы\");\n\nreturn [{ json: { ...input, replyText: text, crm } }];"
+      },
+      "id": "br16-code",
+      "name": "Build Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        1168
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ ($json.message || $json.callback_query.message).chat.id }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {}
+      },
+      "id": "br16-tg",
+      "name": "Send Status",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        1168
+      ],
+      "webhookId": "430bd3a4-7396-48d8-ac0c-c2c914095fdd",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ROUTE GATE: only process if _route === 17\nif ($input.first().json._route !== 17) { return []; }\n\n\nconst input = $input.first().json;\n\n\nconst _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst crm = input.crm || {};\nconst appConfig = input.app_config;\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\nconst tid = crm.telegram_id;\n// Go back one step in the funnel\nconst state = crm.state;\nlet newState = \"new\";\nif (state === \"awaiting_contact\") newState = \"awaiting_subscription\";\nelse if (state === \"awaiting_package\") newState = \"awaiting_contact\";\nelse if (state === \"awaiting_photo\") newState = \"awaiting_package\";\nelse if (state === \"pending_approval\") newState = \"awaiting_photo\";\nelse if (state.startsWith(\"awaiting_review\")) newState = \"approved\";\n\nawait fetch(baseUrl + \"/users?telegram_id=eq.\" + tid, {\n  method: \"PATCH\", headers,\n  body: JSON.stringify({ user_state: newState, last_seen: new Date().toISOString() })\n});\n\nreturn [{ json: { ...input, replyText: \"Возвращаемся назад...\", crm: {...crm, state: newState} } }];"
+      },
+      "id": "br17-code",
+      "name": "Build Back",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        1280
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ ($json.message || $json.callback_query.message).chat.id }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {}
+      },
+      "id": "br17-tg",
+      "name": "Send Back",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        1280
+      ],
+      "webhookId": "60e71aa3-84b7-4758-b908-fc045259fcc7",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ROUTE GATE: only process if _route === 18\nif ($input.first().json._route !== 18) { return []; }\n\n\nconst input = $input.first().json;\nconst crm = input.crm || {};\nconst appConfig = input.app_config;\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\nconst tid = crm.telegram_id;\nreturn [{ json: { ...input, replyText: \"Продолжаем!\", crm } }];"
+      },
+      "id": "br18-code",
+      "name": "Build Continue",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        1408
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ ($json.message || $json.callback_query.message).chat.id }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {}
+      },
+      "id": "br18-tg",
+      "name": "Send Continue",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        1408
+      ],
+      "webhookId": "1b2f8c92-2adb-4efa-9470-ac1c6aafcdbe",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ROUTE GATE: only process if _route === 19\nif ($input.first().json._route !== 19) { return []; }\n\n\nconst input = $input.first().json;\n\n\nconst _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst crm = input.crm || {};\nconst appConfig = input.app_config;\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\nconst tid = crm.telegram_id;\nawait fetch(baseUrl + \"/users?telegram_id=eq.\" + tid, {\n  method: \"PATCH\", headers,\n  body: JSON.stringify({ user_state: \"new\", purchase_status: null, bonus_access: \"locked\", selected_package: null, last_seen: new Date().toISOString() })\n});\nawait fetch(baseUrl + \"/events\", {\n  method: \"POST\", headers,\n  body: JSON.stringify({ user_id: tid, event_name: \"reset\", payload: {} })\n});\n\nconst text = \"Всё сброшено! Начните заново с /start\";\nreturn [{ json: { ...input, replyText: text, crm: {...crm, state: \"new\", purchase_status: null, bonus_access: \"locked\"} } }];"
+      },
+      "id": "br19-code",
+      "name": "Reset State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        1520
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ ($json.message || $json.callback_query.message).chat.id }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {}
+      },
+      "id": "br19-tg",
+      "name": "Send Reset",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        1520
+      ],
+      "webhookId": "2aae3f1c-8022-40fc-a674-fbed0abae1a7",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ROUTE GATE: only process if _route === 20\nif ($input.first().json._route !== 20) { return []; }\n\n\nconst input = $input.first().json;\nconst text = \"Чат-поддержка: @ch_spa_support\\n\\nКоманды:\\n/start - начать\\n/status - мой статус\\n/help - помощь\\n/back - назад\\n/continue - продолжить\\n/reset - начать заново\";\nreturn [{ json: { ...input, replyText: text } }];"
+      },
+      "id": "br20-code",
+      "name": "Help Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        1648
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ ($json.message || $json.callback_query.message).chat.id }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {}
+      },
+      "id": "br20-tg",
+      "name": "Send Help",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        1648
+      ],
+      "webhookId": "e788901c-7658-4fd5-a7a1-75b13aa874f2",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ROUTE GATE: only process if _route === 25\nif ($input.first().json._route !== 25) { return []; }\n\n\nconst input = $input.first().json;\n\n\nconst _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst crm = input.crm || {};\nconst appConfig = input.app_config;\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\nconst tid = crm.telegram_id;\nconst textMsg = input.message?.text || \"\";\nconst phoneLike = /^\\+?\\d[\\d\\s\\-()]{8,}$/.test(textMsg);\nif (!phoneLike) {\n  return [{ json: { ...input, replyText: \"Пожалуйста, поделитесь контактом через кнопку ниже.\", crm } }];\n}\nawait fetch(baseUrl + \"/users?telegram_id=eq.\" + tid, {\n  method: \"PATCH\", headers,\n  body: JSON.stringify({ phone: textMsg, user_state: \"awaiting_package\", last_seen: new Date().toISOString() })\n});\nconst text = \"Телефон сохранён. Выберите ваш набор бонусов:\";\nconst kb = {\"inline_keyboard\": [[{\"text\": \"1 варежка (3000 руб.)\", \"callback_data\": \"PACKAGE_STANDARD\"}], [{\"text\": \"1+2 варежки (7000 руб.)\", \"callback_data\": \"PACKAGE_PREMIUM\"}], [{\"text\": \"VIP: 1+2+5 варежек (11000 руб.)\", \"callback_data\": \"PACKAGE_VIP\"}]]};\nreturn [{ json: { ...input, replyText: text, replyKeyboard: kb, crm: {...crm, state: \"awaiting_package\"} } }];"
+      },
+      "id": "br25-code",
+      "name": "Phone As Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        1760
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ ($json.message || $json.callback_query.message).chat.id }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {}
+      },
+      "id": "br25-tg",
+      "name": "Send Phone Confirm",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        1760
+      ],
+      "webhookId": "50749a3f-a959-4045-894d-795e6e29b3d2",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ROUTE GATE: only process if _route === 10\nif ($input.first().json._route !== 10) { return []; }\n\n\nconst input = $input.first().json;\n\n\nconst _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst crm = input.crm || {};\nconst appConfig = input.app_config;\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\nconst tid = crm.telegram_id;\nawait fetch(baseUrl + \"/users?telegram_id=eq.\" + tid, {\n  method: \"PATCH\", headers,\n  body: JSON.stringify({ user_state: \"awaiting_review_marketplace\", last_seen: new Date().toISOString() })\n});\nconst text = \"Выберите маркетплейс где оставили отзыв:\";\nconst kb = {\"inline_keyboard\": [[{\"text\": \"Wildberries\", \"callback_data\": \"MARKETPLACE_WB\"}], [{\"text\": \"Ozon\", \"callback_data\": \"MARKETPLACE_OZON\"}], [{\"text\": \"Яндекс.Маркет\", \"callback_data\": \"MARKETPLACE_YM\"}]]};\nreturn [{ json: { ...input, replyText: text, replyKeyboard: kb, crm: {...crm, state: \"awaiting_review_marketplace\"} } }];"
+      },
+      "id": "br10-code",
+      "name": "Start Review",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        1888
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ ($json.message || $json.callback_query.message).chat.id }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {}
+      },
+      "id": "br10-tg",
+      "name": "Send Review Start",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        1888
+      ],
+      "webhookId": "30877773-7857-44fb-bb9a-2ddf762d1084",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ROUTE GATE: only process if _route === 11\nif ($input.first().json._route !== 11) { return []; }\n\n\nconst input = $input.first().json;\n\n\nconst _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst crm = input.crm || {};\nconst appConfig = input.app_config;\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\nconst tid = crm.telegram_id;\nconst cb = input.callback_query?.data || \"\";\nconst mpMap = {\"MARKETPLACE_WB\": \"Wildberries\", \"MARKETPLACE_OZON\": \"Ozon\", \"MARKETPLACE_YM\": \"Яндекс.Маркет\"};\nconst mp = mpMap[cb] || cb;\nawait fetch(baseUrl + \"/users?telegram_id=eq.\" + tid, {\n  method: \"PATCH\", headers,\n  body: JSON.stringify({ user_state: \"awaiting_review_screenshot\", last_seen: new Date().toISOString() })\n});\nawait fetch(baseUrl + \"/events\", {\n  method: \"POST\", headers,\n  body: JSON.stringify({ user_id: tid, event_name: \"review_marketplace_selected\", payload: { marketplace: mp } })\n});\nconst text = \"Загрузите скриншот опубликованного отзыва.\";\nreturn [{ json: { ...input, replyText: text, crm: {...crm, state: \"awaiting_review_screenshot\", review_marketplace: mp} } }];"
+      },
+      "id": "br11-code",
+      "name": "Save Marketplace",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        2000
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ ($json.message || $json.callback_query.message).chat.id }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {}
+      },
+      "id": "br11-tg",
+      "name": "Send Ask Screenshot",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        2000
+      ],
+      "webhookId": "6b400af4-dbb6-46b8-9d9a-b0563c3eecab",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ROUTE GATE: only process if _route === 12\nif ($input.first().json._route !== 12) { return []; }\n\n\nconst input = $input.first().json;\n\n\nconst _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst crm = input.crm || {};\nconst appConfig = input.app_config;\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\nconst tid = crm.telegram_id;\nconst photo = input.message?.photo;\nlet fileId = \"\";\nif (photo && Array.isArray(photo)) fileId = photo[photo.length - 1].file_id;\nawait fetch(baseUrl + \"/users?telegram_id=eq.\" + tid, {\n  method: \"PATCH\", headers,\n  body: JSON.stringify({ user_state: \"awaiting_review_product_photo\", last_seen: new Date().toISOString() })\n});\nawait fetch(baseUrl + \"/events\", {\n  method: \"POST\", headers,\n  body: JSON.stringify({ user_id: tid, event_name: \"review_screenshot_uploaded\", payload: { file_id: fileId } })\n});\nconst text = \"Теперь загрузите фото распакованного товара.\";\nreturn [{ json: { ...input, replyText: text, reviewScreenshotFileId: fileId, crm: {...crm, state: \"awaiting_review_product_photo\"} } }];"
+      },
+      "id": "br12-code",
+      "name": "Save Rev Screenshot",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        2128
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ ($json.message || $json.callback_query.message).chat.id }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {}
+      },
+      "id": "br12-tg",
+      "name": "Send Ask Prod Photo",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        2128
+      ],
+      "webhookId": "9df6b897-49bf-4db1-a3f5-522c8662f62b",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ROUTE GATE: only process if _route === 13\nif ($input.first().json._route !== 13) { return []; }\n\n\nconst input = $input.first().json;\n\n\nconst _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst crm = input.crm || {};\nconst appConfig = input.app_config;\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\nconst tid = crm.telegram_id;\nconst photo = input.message?.photo;\nlet fileId = \"\";\nif (photo && Array.isArray(photo)) fileId = photo[photo.length - 1].file_id;\n\nconst resp = await fetch(baseUrl + \"/review_submissions\", {\n  method: \"POST\", headers,\n  body: JSON.stringify({\n    user_id: tid, marketplace: crm.review_marketplace || \"\",\n    review_screenshot_file_id: input.reviewScreenshotFileId || \"\",\n    product_photo_file_id: fileId, status: \"pending\"\n  })\n});\nawait fetch(baseUrl + \"/users?telegram_id=eq.\" + tid, {\n  method: \"PATCH\", headers,\n  body: JSON.stringify({ user_state: \"review_pending\", last_seen: new Date().toISOString() })\n});\nawait fetch(baseUrl + \"/events\", {\n  method: \"POST\", headers,\n  body: JSON.stringify({ user_id: tid, event_name: \"review_product_photo_uploaded\", payload: {} })\n});\n\n// Notify managers\nconst mgrChat = appConfig.MANAGERS_GROUP_CHAT_ID;\nconst notifText = \"🔄 Новый отзыв на модерацию!\\nПользователь: \" + tid;\n\nreturn [{ json: { ...input, replyText: \"Спасибо! Ваш отзыв отправлен на проверку.\", notifyManagers: true, managerText: notifText, managerChatId: mgrChat, crm: {...crm, state: \"review_pending\"} } }];"
+      },
+      "id": "br13-code",
+      "name": "Save Rev Prod Photo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        2240
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ ($json.message || $json.callback_query.message).chat.id }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {}
+      },
+      "id": "br13-tg",
+      "name": "Send Rev Pending",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        2240
+      ],
+      "webhookId": "8a4a4a42-cf1c-4f46-b08c-d9d868dbed0e",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ROUTE GATE: only process if _route === 21\nif ($input.first().json._route !== 21) { return []; }\n\n\nconst input = $input.first().json;\n\n\nconst _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst crm = input.crm || {};\nconst appConfig = input.app_config;\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\nconst tid = crm.telegram_id;\nconst allUsers = await fetch(baseUrl + \"/users?select=*&limit=1000\", { headers });\nconst users = await allUsers.json();\nconst rows = Array.isArray(users) ? users : [];\nlet csv = \"telegram_id,username,phone,user_state,selected_package,purchase_status,bonus_access\\n\";\nfor (const u of rows) {\n  csv += [u.telegram_id, u.username, u.phone, u.user_state, u.selected_package, u.purchase_status, u.bonus_access].join(\",\") + \"\\n\";\n}\nreturn [{ json: { ...input, replyText: \"Экспорт:\\n\\n\" + csv.substring(0, 3800), crm } }];"
+      },
+      "id": "br21-code",
+      "name": "Admin Export",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        2368
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ ($json.message || $json.callback_query.message).chat.id }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {}
+      },
+      "id": "br21-tg",
+      "name": "Send Export CSV",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        2368
+      ],
+      "webhookId": "f4c09270-b181-483d-b438-cbb3c6b15e61",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ROUTE GATE: only process if _route === 22\nif ($input.first().json._route !== 22) { return []; }\n\n\nconst input = $input.first().json;\n\n\nconst _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst crm = input.crm || {};\nconst appConfig = input.app_config;\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\nconst tid = crm.telegram_id;\nconst text = input.message?.text || \"\";\n\nif (text === \"/stats\") {\n  const r = await fetch(baseUrl + \"/view_conversion_summary?select=*\", { headers });\n  const stats = await r.json();\n  let reply = \"📊 Статистика:\\n\";\n  for (const s of (Array.isArray(stats) ? stats : [])) {\n    reply += s.period + \": стартов \" + s.starts + \", заявок \" + s.submissions + \", одобрено \" + s.approved + \", кликов \" + s.bonus_clicks + \", оплат \" + s.payments + \"\\n\";\n  }\n  return [{ json: { ...input, replyText: reply, crm } }];\n}\n\nif (text.startsWith(\"/broadcast\")) {\n  const msg = text.replace(\"/broadcast \", \"\").trim();\n  const r = await fetch(baseUrl + \"/users?select=telegram_id\", { headers });\n  const users = await r.json();\n  const chats = (Array.isArray(users) ? users : []).map(u => u.telegram_id);\n  return [{ json: { ...input, replyText: \"Рассылка на \" + chats.length + \" пользователей.\", broadcastChats: chats, broadcastMsg: msg, crm } }];\n}\n\nif (text.startsWith(\"/user\")) {\n  const uid = text.replace(\"/user \", \"\").trim();\n  const r = await fetch(baseUrl + \"/users?telegram_id=eq.\" + uid + \"&select=*\", { headers });\n  const u = await r.json();\n  const user = (Array.isArray(u) ? u[0] : u) || {};\n  return [{ json: { ...input, replyText: \"Пользователь: \" + JSON.stringify(user, null, 2), crm } }];\n}\n\nreturn [{ json: { ...input, replyText: \"Команды: /stats, /broadcast <текст>, /user <id>\", crm } }];"
+      },
+      "id": "br22-code",
+      "name": "Admin Commands",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        2480
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ ($json.message || $json.callback_query.message).chat.id }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {}
+      },
+      "id": "br22-tg",
+      "name": "Send Admin Result",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        2480
+      ],
+      "webhookId": "0ef8d5e2-5c08-474c-9eb3-f761adc72831",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ROUTE GATE: only process if _route === 23\nif ($input.first().json._route !== 23) { return []; }\n\n\nconst input = $input.first().json;\n\n\nconst _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst crm = input.crm || {};\nconst appConfig = input.app_config;\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\nconst tid = crm.telegram_id;\nawait fetch(baseUrl + \"/users?telegram_id=eq.\" + tid, {\n  method: \"PATCH\", headers,\n  body: JSON.stringify({ user_state: \"awaiting_upsell\", last_seen: new Date().toISOString() })\n});\nawait fetch(baseUrl + \"/events\", {\n  method: \"POST\", headers,\n  body: JSON.stringify({ user_id: tid, event_name: \"upsell_accepted\", payload: {} })\n});\nconst text = \"Скоро вы получите ссылку на оплату апгрейда!\";\nreturn [{ json: { ...input, replyText: text, crm: {...crm, state: \"awaiting_upsell\"} } }];"
+      },
+      "id": "br23-code",
+      "name": "Upsell Yes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        2608
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ ($json.message || $json.callback_query.message).chat.id }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {}
+      },
+      "id": "br23-tg",
+      "name": "Send Upsell Yes",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        2608
+      ],
+      "webhookId": "9715ad5d-6acd-49c0-b892-8747ccc56805",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ROUTE GATE: only process if _route === 24\nif ($input.first().json._route !== 24) { return []; }\n\n\nconst input = $input.first().json;\n\n\nconst _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst crm = input.crm || {};\nconst appConfig = input.app_config;\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\nconst tid = crm.telegram_id;\nawait fetch(baseUrl + \"/users?telegram_id=eq.\" + tid, {\n  method: \"PATCH\", headers,\n  body: JSON.stringify({ user_state: \"completed\", last_seen: new Date().toISOString() })\n});\nawait fetch(baseUrl + \"/events\", {\n  method: \"POST\", headers,\n  body: JSON.stringify({ user_id: tid, event_name: \"upsell_declined\", payload: {} })\n});\nconst text = \"Спасибо за участие! Если передумаете — пишите.\";\nreturn [{ json: { ...input, replyText: text, crm: {...crm, state: \"completed\"} } }];"
+      },
+      "id": "br24-code",
+      "name": "Upsell No",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        2720
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ ($json.message || $json.callback_query.message).chat.id }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {}
+      },
+      "id": "br24-tg",
+      "name": "Send Upsell No",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        2720
+      ],
+      "webhookId": "f730d1a8-7419-480c-bd9f-ab311b90b1d5",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes"
+            }
+          ]
+        }
+      },
+      "id": "cron-auto-approve",
+      "name": "Auto-Approve Cron",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const appConfig = $input.first().json.app_config || $input.first().json;\n\n\nconst _n8nThis = this;\n\n\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\n\nconst delayH = appConfig.AUTO_APPROVE_DELAY_HOURS || 1;\nconst cutoff = new Date(Date.now() - delayH * 60 * 60 * 1000).toISOString();\nconst redirectBase = appConfig.PAYMENT_RETURN_URL || (appConfig.SUPABASE_URL + \"/redirect\");\n\nconst resp = await fetch(baseUrl + \"/submissions?purchase_status=eq.pending&timer_started_at=lte.\" + cutoff + \"&select=*&limit=10\", { headers });\nconst subs = Array.isArray(await resp.json()) ? await resp.json() : [];\n\nconst results = [];\nfor (const sub of subs) {\n  await fetch(baseUrl + \"/submissions?id=eq.\" + sub.id, {\n    method: \"PATCH\", headers,\n    body: JSON.stringify({ purchase_status: \"approved\", approved_at: new Date().toISOString() })\n  });\n  await fetch(baseUrl + \"/users?telegram_id=eq.\" + sub.user_id, {\n    method: \"PATCH\", headers,\n    body: JSON.stringify({ purchase_status: \"approved\", bonus_access: \"unlocked\", user_state: \"approved\" })\n  });\n  await fetch(baseUrl + \"/events\", {\n    method: \"POST\", headers,\n    body: JSON.stringify({ user_id: sub.user_id, event_name: \"submission_approved\", payload: { submission_id: sub.id, package: sub.package, auto: true } })\n  });\n\n  // Get bonuses for this user's package\n  const bResp = await fetch(baseUrl + \"/bonuses?package=eq.\" + (sub.package || \"standard\") + \"&is_active=eq.true&select=*\", { headers });\n  const bonuses = Array.isArray(await bResp.json()) ? await bResp.json() : [];\n  const bonusList = bonuses.map((b, i) => (i + 1) + \". \" + b.bonus_name).join(\"\\n\");\n\n  const text = \"✅ Ваша заявка одобрена!\\n\\nПакет: \" + sub.package + \"\\n\\nВаши бонусы:\\n\" + bonusList;\n  const kb = JSON.stringify({\n    inline_keyboard: bonuses.map(b => [{ text: \"🎁 \" + b.bonus_name, url: redirectBase + \"/r/\" + sub.user_id + \"/\" + b.bonus_key }])\n  });\n\n  results.push({ chatId: sub.user_id, text, replyKeyboard: kb });\n}\n\nif (results.length === 0) return [{ json: { done: true, approved: 0 } }];\nreturn results.map(r => ({ json: r }));"
+      },
+      "id": "code-auto-approve",
+      "name": "Auto-Approve Worker",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "cron-followup",
+      "name": "Followup Cron",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const appConfig = $input.first().json.app_config || $input.first().json;\n\n\nconst _n8nThis = this;\n\n\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\n\nconst followupConfig = {\n  awaiting_subscription: { hours: 24, text: \"Вы не закончили оформление! Подпишитесь на канал и нажмите Проверить подписку.\", kb: '[{\"text\":\"Проверить подписку\",\"callback_data\":\"SUB_CONFIRMED\"}]' },\n  awaiting_contact: { hours: 24, text: \"Остался последний шаг! Поделитесь контактом чтобы продолжить.\", kb: '[{\"text\":\"Поделиться контактом\",\"request_contact\":true}]' },\n  awaiting_package: { hours: 48, text: \"Выберите ваш набор бонусов и получите подарки!\", kb: '[{\"text\":\"1 варежка\",\"callback_data\":\"PACKAGE_STANDARD\"},{\"text\":\"1+2 варежки\",\"callback_data\":\"PACKAGE_PREMIUM\"},{\"text\":\"VIP\",\"callback_data\":\"PACKAGE_VIP\"}]' },\n  awaiting_photo: { hours: 48, text: \"Загрузите фото чека чтобы мы могли подтвердить покупку.\", kb: null },\n  pending_approval: { hours: 6, text: \"Ваша заявка обрабатывается. Бонусы будут начислены автоматически.\", kb: null },\n  awaiting_review_marketplace: { hours: 72, text: \"Оставьте отзыв и получите дополнительные бонусы!\", kb: '[{\"text\":\"Wildberries\",\"callback_data\":\"MARKETPLACE_WB\"},{\"text\":\"Ozon\",\"callback_data\":\"MARKETPLACE_OZON\"}]' },\n  awaiting_upsell: { hours: 72, text: \"Увеличьте ваш набор бонусов со скидкой!\", kb: '[{\"text\":\"Увеличить\",\"callback_data\":\"UPSELL_YES\"},{\"text\":\"Нет\",\"callback_data\":\"UPSELL_NO\"}]' }\n};\n\nconst now = new Date();\nconst results = [];\n\nfor (const [state, cfg] of Object.entries(followupConfig)) {\n  const cutoff = new Date(now - cfg.hours * 60 * 60 * 1000).toISOString();\n  const resp = await fetch(baseUrl + \"/users?user_state=eq.\" + state + \"&last_seen=lte.\" + cutoff + \"&select=telegram_id,last_followup_at&limit=20\", { headers });\n  const users = Array.isArray(await resp.json()) ? await resp.json() : [];\n\n  for (const user of users) {\n    if (user.last_followup_at) {\n      const last = new Date(user.last_followup_at);\n      if ((now - last) / 3600000 < cfg.hours) continue;\n    }\n    await fetch(baseUrl + \"/users?telegram_id=eq.\" + user.telegram_id, {\n      method: \"PATCH\", headers,\n      body: JSON.stringify({ last_followup_at: now.toISOString() })\n    });\n    await fetch(baseUrl + \"/events\", {\n      method: \"POST\", headers,\n      body: JSON.stringify({ user_id: user.telegram_id, event_name: \"followup_sent\", payload: { state } })\n    });\n\n    const replyMarkup = cfg.kb ? '{\"inline_keyboard\":[[' + cfg.kb + ']]}' : \"\";\n    results.push({\n      chatId: user.telegram_id,\n      text: cfg.text,\n      replyKeyboard: replyMarkup || undefined\n    });\n  }\n}\n\nif (results.length === 0) {\n  return [{ json: { done: true, sent: 0 } }];\n}\nreturn results.map(r => ({ json: r }));"
+      },
+      "id": "code-followup",
+      "name": "Followup Worker",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24
+            }
+          ]
+        }
+      },
+      "id": "cron-report",
+      "name": "Daily Report Cron",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const appConfig = $input.first().json.app_config || $input.first().json;\n\n\nconst _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\nconst resp = await fetch(baseUrl + \"/view_conversion_summary?select=*\", { headers });\nconst rows = Array.isArray(await resp.json()) ? await resp.json() : [];\nconst today = rows.find(r => r.period === \"today\") || {};\nconst week = rows.find(r => r.period === \"week\") || {};\n\nconst pct = (a, b) => b && b > 0 ? Math.round(a / b * 100) + \"%\" : \"-\";\n\nconst text = [\n  \"📊 <b>CH-SPA — отчёт</b>\",\n  \"\",\n  \"📅 <b>За сегодня:</b>\",\n  \"Стартов: \" + (today.starts || 0),\n  \"Контактов: \" + (today.contacts || 0),\n  \"Заявок: \" + (today.submissions || 0),\n  \"Одобрено: \" + (today.approved || 0),\n  \"Кликов: \" + (today.bonus_clicks || 0),\n  \"Оплат: \" + (today.payments || 0),\n  \"\",\n  \"📆 <b>Среднее за 7 дней:</b>\",\n  \"Стартов: \" + Math.round(week.starts || 0),\n  \"Заявок: \" + Math.round(week.submissions || 0),\n  \"Одобрено: \" + Math.round(week.approved || 0),\n  \"Оплат: \" + Math.round(week.payments || 0),\n  \"\",\n  \"Конверсия: старт→заявка \" + pct(today.submissions, today.starts) + \", заявка→одобрение \" + pct(today.approved, today.submissions)\n].join(\"\\n\");\n\nconst mgrChat = appConfig.MANAGERS_GROUP_CHAT_ID;\nreturn [{ json: { replyText: text, parseMode: \"HTML\", chatId: mgrChat } }];"
+      },
+      "id": "code-report",
+      "name": "Daily Report Worker",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {}
+      },
+      "id": "tg-report",
+      "name": "Send Daily Report",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        448,
+        1120
+      ],
+      "webhookId": "e61ea31c-8b7f-4d8a-91a2-8970292c5fc6",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "path": "bonus-redirect",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-bonus",
+      "name": "Bonus Redirect Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        0,
+        1280
+      ],
+      "webhookId": "bonus-redirect-v2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const appConfig = $input.first().json.app_config || $input.first().json;\n\n\nconst _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\nconst params = $input.first().json.params || $input.first().json.query || {};\nconst userId = String(params.userId || params.user_id || \"\").trim();\nconst bonusKey = String(params.bonusKey || params.bonus_key || \"\").trim();\n\nif (!userId || !bonusKey) {\n  return [{ json: { status: 400, body: \"Missing userId or bonusKey\" } }];\n}\n\nconst uResp = await fetch(baseUrl + \"/users?telegram_id=eq.\" + userId + \"&select=selected_package\", { headers });\nconst user = (Array.isArray(await uResp.json()) ? await uResp.json() : [])[0];\nif (!user?.selected_package) {\n  return [{ json: { status: 404, body: \"User or package not found\" } }];\n}\n\nconst bResp = await fetch(baseUrl + \"/bonuses?package=eq.\" + user.selected_package + \"&bonus_key=eq.\" + bonusKey + \"&select=*\", { headers });\nconst bonus = (Array.isArray(await bResp.json()) ? await bResp.json() : [])[0];\nif (!bonus?.real_url) {\n  return [{ json: { status: 404, body: \"Bonus not found\" } }];\n}\n\nawait fetch(baseUrl + \"/events\", {\n  method: \"POST\", headers,\n  body: JSON.stringify({ user_id: userId, event_name: \"bonus_clicked\", payload: { package: user.selected_package, bonus_key: bonusKey, bonus_name: bonus.bonus_name, school_name: bonus.school_name } })\n});\n\n// 302 redirect\nreturn [{ json: { status: 302, headers: { Location: bonus.real_url } } }];"
+      },
+      "id": "code-bonus-redirect",
+      "name": "Bonus Redirect Worker",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        1280
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "payment-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-payment",
+      "name": "Payment Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        0,
+        1440
+      ],
+      "webhookId": "payment-webhook-v2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const appConfig = $input.first().json.app_config || $input.first().json;\n\n\nconst _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\nconst body = $input.first().json.body || $input.first().json;\nconst event = body.event || \"\";\nconst payment = body.object || {};\nconst paymentId = payment.id || \"\";\nconst status = payment.status || event;\n\n// Idempotency check\nif (paymentId) {\n  const check = await fetch(baseUrl + \"/payments?provider_payment_id=eq.\" + paymentId + \"&select=id\", { headers });\n  const existing = (Array.isArray(await check.json()) ? await check.json() : []);\n  if (existing.length > 0 && existing[0].status !== \"pending\") {\n    return [{ json: { ok: true, message: \"Already processed\" } }];\n  }\n}\n\nif (status === \"payment.succeeded\" || status === \"succeeded\") {\n  const userId = payment.metadata?.user_id || \"\";\n  await fetch(baseUrl + \"/payments\", {\n    method: \"POST\", headers,\n    body: JSON.stringify({ user_id: userId, provider_payment_id: paymentId, amount: payment.amount?.value || 0, currency: payment.amount?.currency || \"RUB\", status: \"succeeded\", idempotency_key: paymentId, payload: body })\n  });\n  if (userId) {\n    await fetch(baseUrl + \"/users?telegram_id=eq.\" + userId, { method: \"PATCH\", headers, body: JSON.stringify({ user_state: \"completed\" }) });\n  }\n  await fetch(baseUrl + \"/events\", { method: \"POST\", headers, body: JSON.stringify({ user_id: userId, event_name: \"payment_succeeded\", payload: { payment_id: paymentId } }) });\n  return [{ json: { ok: true, replyText: \"Оплата прошла! Спасибо за покупку!\", chatId: userId } }];\n}\n\nreturn [{ json: { ok: true, message: \"Event ignored: \" + status } }];"
+      },
+      "id": "code-payment",
+      "name": "Payment Worker",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        1440
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {}
+      },
+      "id": "tg-payment",
+      "name": "Send Payment Confirm",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        448,
+        1440
+      ],
+      "webhookId": "7e8f2eab-0759-4076-941c-14157dadea60",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ROUTE GATE: only process if _route === 8\nif ($input.first().json._route !== 8) { return []; }\n\n\nconst input = $input.first().json;\n\n\nconst _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst crm = input.crm || {};\nconst appConfig = input.app_config;\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\nconst tid = crm.telegram_id;\nconst cb = input.callback_query?.data || \"\";\nconst parts = cb.split(\"|\");\nconst submissionId = parts[1] || \"\";\nconst fromId = String(input.callback_query?.from?.id || \"\");\n\nif (!submissionId) return [{ json: { ...input, replyText: \"Ошибка: нет ID заявки\" } }];\n\n// Idempotency check\nconst checkResp = await fetch(baseUrl + \"/submissions?id=eq.\" + submissionId + \"&select=*\", { headers });\nconst subs = await checkResp.json();\nconst sub = (Array.isArray(subs) ? subs : [])[0];\n\nif (!sub) return [{ json: { ...input, replyText: \"Заявка не найдена\" } }];\nif (sub.purchase_status !== \"pending\") return [{ json: { ...input, replyText: \"Заявка уже обработана: \" + sub.purchase_status } }];\n\n// Approve\nawait fetch(baseUrl + \"/submissions?id=eq.\" + submissionId, {\n  method: \"PATCH\", headers,\n  body: JSON.stringify({ purchase_status: \"approved\", approved_at: new Date().toISOString(), decided_by: fromId })\n});\nawait fetch(baseUrl + \"/users?telegram_id=eq.\" + sub.user_id, {\n  method: \"PATCH\", headers,\n  body: JSON.stringify({ purchase_status: \"approved\", bonus_access: \"unlocked\", user_state: \"approved\" })\n});\nawait fetch(baseUrl + \"/events\", {\n  method: \"POST\", headers,\n  body: JSON.stringify({ user_id: sub.user_id, event_name: \"submission_approved\", payload: { submission_id: submissionId, by: fromId } })\n});\n\n// Notify user\nconst bonusResp = await fetch(baseUrl + \"/bonuses?package=eq.\" + (sub.package || \"standard\") + \"&is_active=eq.true&select=*\", { headers });\nconst bonuses = Array.isArray(await bonusResp.json()) ? await bonusResp.json() : [];\nconst bonusList = bonuses.map((b, i) => (i + 1) + \". \" + b.bonus_name).join(\"\\n\");\n\nconst text = \"✅ Админ одобрил заявку!\\n\\nВаши бонусы:\\n\" + bonusList;\nconst redirectBase = appConfig.PAYMENT_RETURN_URL || (appConfig.SUPABASE_URL + \"/redirect\");\nconst kb = JSON.stringify({\n  inline_keyboard: bonuses.map(b => [{ text: \"🎁 \" + b.bonus_name, url: redirectBase + \"/r/\" + sub.user_id + \"/\" + b.bonus_key }])\n});\n\nreturn [{ json: { ...input, replyText: \"✅ Заявка #\" + submissionId + \" одобрена.\", notifyUser: true, userText: text, userKeyboard: kb, userChatId: sub.user_id } }];"
+      },
+      "id": "br8-code-v5",
+      "name": "Admin Approve Purchase",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        2960
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ ($json.message || $json.callback_query.message).chat.id }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {}
+      },
+      "id": "br8-tg-v5",
+      "name": "Send Approve Purchase",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        2960
+      ],
+      "webhookId": "c4dd32ff-40ee-4e16-95de-3cf10bba7a2e",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ROUTE GATE: only process if _route === 9\nif ($input.first().json._route !== 9) { return []; }\n\n\nconst input = $input.first().json;\n\n\nconst _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst crm = input.crm || {};\nconst appConfig = input.app_config;\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\nconst tid = crm.telegram_id;\nconst cb = input.callback_query?.data || \"\";\nconst parts = cb.split(\"|\");\nconst submissionId = parts[1] || \"\";\nconst fromId = String(input.callback_query?.from?.id || \"\");\n\nif (!submissionId) return [{ json: { ...input, replyText: \"Ошибка: нет ID заявки\" } }];\n\nconst checkResp = await fetch(baseUrl + \"/submissions?id=eq.\" + submissionId + \"&select=*\", { headers });\nconst subs = await checkResp.json();\nconst sub = (Array.isArray(subs) ? subs : [])[0];\n\nif (!sub) return [{ json: { ...input, replyText: \"Заявка не найдена\" } }];\nif (sub.purchase_status !== \"pending\") return [{ json: { ...input, replyText: \"Заявка уже обработана\" } }];\n\nawait fetch(baseUrl + \"/submissions?id=eq.\" + submissionId, {\n  method: \"PATCH\", headers,\n  body: JSON.stringify({ purchase_status: \"rejected\", decided_by: fromId, decided_at: new Date().toISOString() })\n});\nawait fetch(baseUrl + \"/users?telegram_id=eq.\" + sub.user_id, {\n  method: \"PATCH\", headers,\n  body: JSON.stringify({ purchase_status: \"rejected\", user_state: \"awaiting_photo\" })\n});\nawait fetch(baseUrl + \"/events\", {\n  method: \"POST\", headers,\n  body: JSON.stringify({ user_id: sub.user_id, event_name: \"submission_rejected\", payload: { submission_id: submissionId, by: fromId } })\n});\n\nconst text = \"❌ Ваша заявка отклонена. Пожалуйста, загрузите корректное фото чека.\";\n\nreturn [{ json: { ...input, replyText: \"❌ Заявка #\" + submissionId + \" отклонена.\", notifyUser: true, userText: text, userChatId: sub.user_id } }];"
+      },
+      "id": "br9-code-v5",
+      "name": "Admin Reject Purchase",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        3088
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ ($json.message || $json.callback_query.message).chat.id }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {}
+      },
+      "id": "br9-tg-v5",
+      "name": "Send Reject Purchase",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        3088
+      ],
+      "webhookId": "d6aaddc5-e320-4037-b8c8-9599bbf217f5",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ROUTE GATE: only process if _route === 14\nif ($input.first().json._route !== 14) { return []; }\n\n\nconst input = $input.first().json;\n\n\nconst _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst crm = input.crm || {};\nconst appConfig = input.app_config;\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\nconst tid = crm.telegram_id;\nconst cb = input.callback_query?.data || \"\";\nconst reviewId = cb.split(\"|\")[1] || \"\";\nconst fromId = String(input.callback_query?.from?.id || \"\");\n\nif (!reviewId) return [{ json: { ...input, replyText: \"Ошибка: нет ID отзыва\" } }];\n\nconst checkResp = await fetch(baseUrl + \"/review_submissions?id=eq.\" + reviewId + \"&select=*\", { headers });\nconst reviews = await checkResp.json();\nconst rev = (Array.isArray(reviews) ? reviews : [])[0];\nif (!rev) return [{ json: { ...input, replyText: \"Отзыв не найден\" } }];\nif (rev.status !== \"pending\") return [{ json: { ...input, replyText: \"Отзыв уже обработан\" } }];\n\nawait fetch(baseUrl + \"/review_submissions?id=eq.\" + reviewId, {\n  method: \"PATCH\", headers,\n  body: JSON.stringify({ status: \"approved\", decided_by: fromId, decided_at: new Date().toISOString() })\n});\nawait fetch(baseUrl + \"/users?telegram_id=eq.\" + rev.user_id, {\n  method: \"PATCH\", headers,\n  body: JSON.stringify({ user_state: \"review_approved\", last_seen: new Date().toISOString() })\n});\nawait fetch(baseUrl + \"/events\", {\n  method: \"POST\", headers,\n  body: JSON.stringify({ user_id: rev.user_id, event_name: \"review_approved\", payload: { review_id: reviewId } })\n});\n\n// Offer upsell\nconst textUp = \"🎉 Отзыв подтверждён!\\n\\nХотите увеличить ваш набор бонусов со скидкой?\";\nconst kb = JSON.stringify({\n  inline_keyboard: [\n    [{ text: \"🔥 Увеличить подарок\", callback_data: \"UPSELL_YES\" }],\n    [{ text: \"❌ Нет, спасибо\", callback_data: \"UPSELL_NO\" }]\n  ]\n});\n\nreturn [{ json: { ...input, replyText: \"✅ Отзыв #\" + reviewId + \" одобрен.\", notifyUser: true, userText: textUp, userKeyboard: kb, userChatId: rev.user_id } }];"
+      },
+      "id": "br14-code-v5",
+      "name": "Admin Approve Review",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        3200
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ ($json.message || $json.callback_query.message).chat.id }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {}
+      },
+      "id": "br14-tg-v5",
+      "name": "Send Approve Review",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        3200
+      ],
+      "webhookId": "353c06db-f107-4300-9651-b898c074b6be",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ROUTE GATE: only process if _route === 15\nif ($input.first().json._route !== 15) { return []; }\n\n\nconst input = $input.first().json;\n\n\nconst _n8nThis = this;\n\nasync function fetch(url, opts) {\n  opts = opts || {};\n  const options = {\n    url: url,\n    method: opts.method || 'GET',\n    headers: opts.headers || {}\n  };\n  if (opts.body) {\n    try { options.body = JSON.parse(opts.body); } catch(e) { options.body = opts.body; }\n  }\n  const result = await _n8nThis.helpers.httpRequest(options);\n  return {\n    status: 200,\n    ok: true,\n    json: async function() { return result; },\n    text: async function() { return JSON.stringify(result); }\n  };\n}\n\nconst crm = input.crm || {};\nconst appConfig = input.app_config;\nconst baseUrl = appConfig.SUPABASE_REST_URL;\nconst apiKey = appConfig.SUPABASE_SERVICE_ROLE_KEY;\nconst headers = {\"apikey\": apiKey, \"Authorization\": \"Bearer \" + apiKey, \"Content-Type\": \"application/json\"};\nconst tid = crm.telegram_id;\nconst cb = input.callback_query?.data || \"\";\nconst reviewId = cb.split(\"|\")[1] || \"\";\nconst fromId = String(input.callback_query?.from?.id || \"\");\n\nif (!reviewId) return [{ json: { ...input, replyText: \"Ошибка: нет ID отзыва\" } }];\n\nconst checkResp = await fetch(baseUrl + \"/review_submissions?id=eq.\" + reviewId + \"&select=*\", { headers });\nconst reviews = await checkResp.json();\nconst rev = (Array.isArray(reviews) ? reviews : [])[0];\nif (!rev) return [{ json: { ...input, replyText: \"Отзыв не найден\" } }];\nif (rev.status !== \"pending\") return [{ json: { ...input, replyText: \"Отзыв уже обработан\" } }];\n\nawait fetch(baseUrl + \"/review_submissions?id=eq.\" + reviewId, {\n  method: \"PATCH\", headers,\n  body: JSON.stringify({ status: \"rejected\", decided_by: fromId, decided_at: new Date().toISOString() })\n});\nawait fetch(baseUrl + \"/users?telegram_id=eq.\" + rev.user_id, {\n  method: \"PATCH\", headers,\n  body: JSON.stringify({ user_state: \"awaiting_review_screenshot\", last_seen: new Date().toISOString() })\n});\nawait fetch(baseUrl + \"/events\", {\n  method: \"POST\", headers,\n  body: JSON.stringify({ user_id: rev.user_id, event_name: \"review_rejected\", payload: { review_id: reviewId } })\n});\n\nreturn [{ json: { ...input, replyText: \"❌ Отзыв #\" + reviewId + \" отклонён.\", notifyUser: true, userText: \"Ваш отзыв отклонён. Загрузите корректный скриншот.\", userChatId: rev.user_id } }];"
+      },
+      "id": "br15-code-v5",
+      "name": "Admin Reject Review",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        3328
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ ($json.message || $json.callback_query.message).chat.id }}",
+        "text": "={{ $json.replyText }}",
+        "additionalFields": {}
+      },
+      "id": "br15-tg-v5",
+      "name": "Send Reject Review",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        3328
+      ],
+      "webhookId": "902d8942-c6af-4482-b377-f6fe547c7ab8",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "reply_markup": "={{ $json.replyKeyboard }}"
+        }
+      },
+      "id": "tg-followup-v2",
+      "name": "Send Followup Messages",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        448,
+        960
+      ],
+      "webhookId": "aac8fa30-c12d-41de-9877-d4517c3046c1",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "reply_markup": "={{ $json.replyKeyboard }}"
+        }
+      },
+      "id": "tg-auto-approve-v2",
+      "name": "Send Approve Messages",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        448,
+        800
+      ],
+      "webhookId": "64395468-6fe6-4572-b166-375de7b045fd",
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "expression",
+        "output": "={{ $json._route }}"
+      },
+      "id": "router-v2",
+      "name": "Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [
+        576,
+        304
+      ]
+    },
+    {
+      "id": "telegram-trigger-v2",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [
+        -160,
+        80
+      ],
+      "parameters": {
+        "updates": [
+          "message",
+          "callback_query"
+        ]
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "b1x5cXjr8PBaOxPy",
+          "name": "CH-SPA Bot Token"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "App Config": {
+      "main": [
+        [
+          {
+            "node": "Upsert User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert User": {
+      "main": [
+        [
+          {
+            "node": "Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Subscription": {
+      "main": [
+        [
+          {
+            "node": "Send Check Sub",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sub Confirmed": {
+      "main": [
+        [
+          {
+            "node": "Send Contact Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Contact": {
+      "main": [
+        [
+          {
+            "node": "Send Package Choice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Photo V2": {
+      "main": [
+        [
+          {
+            "node": "Send Photo Received",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Package Standard": {
+      "main": [
+        [
+          {
+            "node": "Send Pkg Standard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Package Premium": {
+      "main": [
+        [
+          {
+            "node": "Send Pkg Premium",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Package VIP": {
+      "main": [
+        [
+          {
+            "node": "Send Pkg VIP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Status": {
+      "main": [
+        [
+          {
+            "node": "Send Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Back": {
+      "main": [
+        [
+          {
+            "node": "Send Back",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Continue": {
+      "main": [
+        [
+          {
+            "node": "Send Continue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reset State": {
+      "main": [
+        [
+          {
+            "node": "Send Reset",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Help Message": {
+      "main": [
+        [
+          {
+            "node": "Send Help",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Phone As Text": {
+      "main": [
+        [
+          {
+            "node": "Send Phone Confirm",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start Review": {
+      "main": [
+        [
+          {
+            "node": "Send Review Start",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Marketplace": {
+      "main": [
+        [
+          {
+            "node": "Send Ask Screenshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Rev Screenshot": {
+      "main": [
+        [
+          {
+            "node": "Send Ask Prod Photo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Rev Prod Photo": {
+      "main": [
+        [
+          {
+            "node": "Send Rev Pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Admin Export": {
+      "main": [
+        [
+          {
+            "node": "Send Export CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Admin Commands": {
+      "main": [
+        [
+          {
+            "node": "Send Admin Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsell Yes": {
+      "main": [
+        [
+          {
+            "node": "Send Upsell Yes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsell No": {
+      "main": [
+        [
+          {
+            "node": "Send Upsell No",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto-Approve Cron": {
+      "main": [
+        [
+          {
+            "node": "Auto-Approve Worker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Followup Cron": {
+      "main": [
+        [
+          {
+            "node": "Followup Worker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Report Cron": {
+      "main": [
+        [
+          {
+            "node": "Daily Report Worker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Report Worker": {
+      "main": [
+        [
+          {
+            "node": "Send Daily Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bonus Redirect Webhook": {
+      "main": [
+        [
+          {
+            "node": "Bonus Redirect Worker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payment Webhook": {
+      "main": [
+        [
+          {
+            "node": "Payment Worker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payment Worker": {
+      "main": [
+        [
+          {
+            "node": "Send Payment Confirm",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Admin Approve Purchase": {
+      "main": [
+        [
+          {
+            "node": "Send Approve Purchase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Admin Reject Purchase": {
+      "main": [
+        [
+          {
+            "node": "Send Reject Purchase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Admin Approve Review": {
+      "main": [
+        [
+          {
+            "node": "Send Approve Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Admin Reject Review": {
+      "main": [
+        [
+          {
+            "node": "Send Reject Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Router": {
+      "main": [
+        [
+          {
+            "node": "Start Welcome",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Subscription",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sub Confirmed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Contact",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Package Standard",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Package Premium",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Package VIP",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Photo V2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Admin Approve Purchase",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Admin Reject Purchase",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Start Review",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Marketplace",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Rev Screenshot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Rev Prod Photo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Admin Approve Review",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Admin Reject Review",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Back",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Continue",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reset State",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Help Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Admin Export",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Admin Commands",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Upsell Yes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Upsell No",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Phone As Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto-Approve Worker": {
+      "main": [
+        [
+          {
+            "node": "Send Approve Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Followup Worker": {
+      "main": [
+        [
+          {
+            "node": "Send Followup Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start Welcome": {
+      "main": [
+        [
+          {
+            "node": "Send Start Welcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "App Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "timezone": "Europe/Moscow",
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": {
+    "node:Auto-Approve Cron": {
+      "recurrenceRules": []
+    },
+    "node:Followup Cron": {
+      "recurrenceRules": [
+        18
+      ]
+    },
+    "node:Daily Report Cron": {
+      "recurrenceRules": [
+        0
+      ]
+    },
+    "node:Polling Cron": {
+      "recurrenceRules": []
+    },
+    "global": {
+      "telegram_offset": 293799156
+    }
+  },
+  "meta": null,
+  "pinData": {},
+  "versionId": "eefc354b-5124-44ff-8ac9-768d972005e9",
+  "activeVersionId": null,
+  "versionCounter": 456,
+  "triggerCount": 6,
+  "shared": [
+    {
+      "updatedAt": "2026-05-01T17:51:44.022Z",
+      "createdAt": "2026-05-01T17:51:44.022Z",
+      "role": "workflow:owner",
+      "workflowId": "oV8dWIoAUHRkLaSb",
+      "projectId": "fZd4cJnI1xKOyWbC",
+      "project": {
+        "updatedAt": "2026-04-08T17:21:08.972Z",
+        "createdAt": "2026-04-08T17:19:05.229Z",
+        "id": "fZd4cJnI1xKOyWbC",
+        "name": "Felix Shat.pomoshnik <shat.pomoshnik@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "55802ec1-883c-423d-bfdb-102763708b43"
+      }
+    }
+  ],
+  "tags": [],
+  "parentFolder": null,
+  "activeVersion": null,
+  "scopes": [
+    "workflow:create",
+    "workflow:delete",
+    "workflow:execute",
+    "workflow:execute-chat",
+    "workflow:list",
+    "workflow:move",
+    "workflow:publish",
+    "workflow:read",
+    "workflow:share",
+    "workflow:unpublish",
+    "workflow:unshare",
+    "workflow:update",
+    "workflow:updateRedactionSetting"
+  ],
+  "checksum": "0d48b006ed1d4f16677d5563316b028c9a0d89221fd26db5376818d8f6546d77"
+}

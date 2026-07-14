@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CH-SPA — Регистрация</title>
+    <style>
+        :root {
+            --tg-theme-bg: #ffffff;
+            --tg-theme-text: #222222;
+            --tg-theme-button: #2ea6ff;
+            --tg-theme-secondary: #f0f0f0;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--tg-theme-bg);
+            color: var(--tg-theme-text);
+            display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; padding: 16px;
+        }
+        .card {
+            width: 100%; max-width: 380px;
+            background: white;
+            border-radius: 16px;
+            padding: 32px 24px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+        }
+        h1 { font-size: 22px; text-align: center; margin-bottom: 16px; }
+        h2 { font-size: 17px; text-align: center; margin-bottom: 20px; color: #444; }
+        .subtitle { font-size: 13px; color: #999; text-align: center; margin-bottom: 20px; }
+        .form-group { margin-bottom: 16px; }
+        label {
+            display: block; font-size: 13px; font-weight: 500;
+            margin-bottom: 4px; color: #555;
+        }
+        input {
+            width: 100%; padding: 12px;
+            border: 1px solid #ddd; border-radius: 10px;
+            font-size: 15px; outline: none; transition: border .2s;
+        }
+        input:focus { border-color: var(--tg-theme-button); }
+        .btn {
+            width: 100%; padding: 13px;
+            border: none; border-radius: 10px;
+            font-size: 16px; font-weight: 600; cursor: pointer;
+            transition: opacity .2s; margin-top: 8px;
+        }
+        .btn:active { opacity: 0.7; }
+        .btn-primary { background: var(--tg-theme-button); color: white; }
+        .btn-google {
+            background: white; color: #444;
+            border: 1px solid #ddd;
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+        }
+        .btn-telegram { background: #54a9eb; color: white; }
+        .btn-success { background: #4caf50; color: white; }
+        .btn-outline {
+            background: white; color: #54a9eb;
+            border: 2px solid #54a9eb;
+        }
+        .divider {
+            text-align: center; margin: 20px 0; color: #999; font-size: 13px;
+            position: relative;
+        }
+        .divider::before, .divider::after {
+            content: ''; position: absolute; top: 50%;
+            width: calc(50% - 20px); height: 1px; background: #e0e0e0;
+        }
+        .divider::before { left: 0; }
+        .divider::after  { right: 0; }
+        .tab-row { display: flex; gap: 0; margin-bottom: 20px; }
+        .tab {
+            flex: 1; text-align: center; padding: 10px; cursor: pointer;
+            border-bottom: 2px solid #e0e0e0; font-size: 14px; font-weight: 500;
+            color: #888; transition: all .2s;
+        }
+        .tab.active { color: var(--tg-theme-button); border-color: var(--tg-theme-button); }
+        .hidden { display: none !important; }
+        .account-info { text-align: center; padding: 16px 0; }
+        .account-info .name { font-size: 20px; font-weight: 700; }
+        .account-info .detail { font-size: 13px; color: #888; margin-top: 4px; }
+        .badge {
+            display: inline-block; padding: 3px 10px; border-radius: 6px;
+            font-size: 12px; font-weight: 600; margin: 2px;
+        }
+        .badge-tg  { background: #e8f4fd; color: #54a9eb; }
+        .badge-google { background: #fef3f2; color: #ea4335; }
+        .badge-email { background: #f0f0f0; color: #666; }
+        .badge-ok { background: #e6f7e6; color: #4caf50; }
+        .badge-warn { background: #fff8e1; color: #f59e0b; }
+        .error-msg { color: #e74c3c; font-size: 13px; margin-top: 4px; }
+        .success-msg { color: #27ae60; font-size: 13px; margin-top: 4px; }
+
+        /* Экран подтверждения телефона */
+        .confirm-screen { text-align: center; padding: 8px 0; }
+        .confirm-icon { font-size: 48px; margin-bottom: 12px; }
+        .step-list { text-align: left; margin: 20px 0; padding: 0; list-style: none; }
+        .step-list li {
+            padding: 8px 0 8px 32px;
+            font-size: 14px; color: #555;
+            position: relative;
+        }
+        .step-list li::before {
+            content: '→'; position: absolute; left: 8px;
+            color: var(--tg-theme-button); font-weight: 700;
+        }
+        .step-list li.done { color: #4caf50; }
+        .step-list li.done::before { content: '✓'; }
+
+        /* Spinner */
+        .spinner {
+            display: inline-block; width: 20px; height: 20px;
+            border: 2px solid #ddd; border-top-color: var(--tg-theme-button);
+            border-radius: 50%; animation: spin .8s linear infinite;
+            vertical-align: middle; margin-right: 8px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Полоса прогресса */
+        .progress-steps {
+            display: flex; justify-content: center; gap: 8px; margin-bottom: 24px;
+        }
+        .progress-dot {
+            width: 12px; height: 12px; border-radius: 50%;
+            background: #e0e0e0; transition: background .3s;
+        }
+        .progress-dot.active { background: var(--tg-theme-button); }
+        .progress-dot.done { background: #4caf50; }
+    </style>
+</head>
+<body>
+
+<div class="card" id="card">
+
+    <!-- ── Загрузка ── -->
+    <div id="loading" style="text-align:center; padding:40px;">
+        <div class="spinner"></div>
+        <p style="margin-top:12px;">Загрузка...</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════ -->
+    <!-- ЭКРАН 1: Вход/Регистрация (браузер)                -->
+    <!-- ═══════════════════════════════════════════════════ -->
+    <div id="auth-forms" class="hidden">
+        <h1>Вход в CH-SPA</h1>
+
+        <!-- Если внутри Telegram — сразу показываем кнопку входа -->
+        <div id="tg-quick-login" class="hidden" style="text-align:center;">
+            <p class="subtitle">Вы в Telegram — вход через один клик</p>
+            <button class="btn btn-telegram" onclick="authViaTelegram()">
+                Войти через Telegram
+            </button>
+            <div class="divider">или через email</div>
+        </div>
+
+        <div class="tab-row">
+            <div class="tab active" data-tab="login" onclick="switchTab('login')">Вход</div>
+            <div class="tab" data-tab="register" onclick="switchTab('register')">Регистрация</div>
+        </div>
+
+        <form id="form-login" onsubmit="handleLogin(event)">
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="login-email" required placeholder="ivan@example.com">
+            </div>
+            <div class="form-group">
+                <label>Пароль</label>
+                <input type="password" id="login-password" required placeholder="••••••">
+            </div>
+            <div id="login-error" class="error-msg"></div>
+            <button type="submit" class="btn btn-primary">Войти</button>
+        </form>
+
+        <form id="form-register" class="hidden" onsubmit="handleRegister(event)">
+            <div class="form-group">
+                <label>Имя</label>
+                <input type="text" id="reg-name" required placeholder="Иван">
+            </div>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="reg-email" required placeholder="ivan@example.com">
+            </div>
+            <div class="form-group">
+                <label>Пароль</label>
+                <input type="password" id="reg-password" required minlength="6" placeholder="Минимум 6 символов">
+            </div>
+            <div id="register-error" class="error-msg"></div>
+            <button type="submit" class="btn btn-primary">Зарегистрироваться</button>
+        </form>
+
+        <div class="divider">или</div>
+
+        <button class="btn btn-google" onclick="startGoogleOAuth()">
+            <svg width="18" height="18" viewBox="0 0 18 18">
+                <path fill="#4285F4" d="M17.785 9.169c0-.738-.06-1.276-.189-1.834h-8.42v3.328h4.942c-.1.828-.638 2.073-1.834 2.91l-.017.112 2.662 2.063.185.018c1.694-1.565 2.67-3.867 2.67-6.597z"/>
+                <path fill="#34A853" d="M9.176 17.938c2.422 0 4.455-.797 5.94-2.172l-2.83-2.193c-.758.528-1.774.897-3.11.897-2.372 0-4.385-1.564-5.102-3.727l-.105.01-2.769 2.142-.036.1c1.475 2.93 4.504 4.943 8.012 4.943z"/>
+                <path fill="#FBBC05" d="M4.074 10.743c-.19-.558-.3-1.156-.3-1.774 0-.618.11-1.216.29-1.774l-.005-.119L1.254 4.9l-.091.044C.416 6.373 0 7.87 0 9.449c0 1.58.416 3.076 1.163 4.385l2.91-2.261z"/>
+                <path fill="#EB4335" d="M9.176 3.583c1.684 0 2.82.728 3.468 1.335l2.531-2.471C13.62.957 11.598 0 9.176 0 5.668 0 2.638 2.013 1.163 4.945l2.9 2.252c.727-2.162 2.74-3.726 5.113-3.726z"/>
+            </svg>
+            Google
+        </button>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════ -->
+    <!-- ЭКРАН 2: Подтверждение телефона через Telegram     -->
+    <!-- ═══════════════════════════════════════════════════ -->
+    <div id="confirm-phone-screen" class="hidden">
+        <div class="progress-steps">
+            <div class="progress-dot done" title="Авторизация"></div>
+            <div class="progress-dot active" id="dot-phone" title="Телефон"></div>
+            <div class="progress-dot" id="dot-done" title="Готово"></div>
+        </div>
+
+        <h2>Подтверждение телефона</h2>
+        <p class="subtitle">
+            Для продолжения необходимо подтвердить ваш номер телефона через Telegram-бота
+        </p>
+
+        <!-- Блок для Telegram-пользователей (уже есть telegram_id) -->
+        <div id="confirm-tg-flow">
+            <ol class="step-list">
+                <li id="step1">Откройте бота в Telegram</li>
+                <li id="step2">Нажмите кнопку <b>«Поделиться контактом»</b></li>
+                <li id="step3">Подтвердите отправку номера</li>
+            </ol>
+            <button class="btn btn-telegram" id="btn-open-bot" onclick="openBotForPhone()">
+                Открыть бота в Telegram
+            </button>
+        </div>
+
+        <!-- Блок для Email-пользователей (нужно сначала привязать Telegram) -->
+        <div id="confirm-email-flow" class="hidden">
+            <ol class="step-list">
+                <li id="estep1">Откройте бота по кнопке ниже</li>
+                <li id="estep2">Отправьте боту код: <b id="link-code-display" style="font-size:22px;letter-spacing:4px;color:#2ea6ff;">------</b></li>
+                <li id="estep3">Нажмите <b>«Поделиться контактом»</b> в боте</li>
+            </ol>
+            <button class="btn btn-telegram" id="btn-open-bot-link" onclick="openBotWithCode()">
+                Открыть бота и отправить код
+            </button>
+            <p style="font-size:11px; color:#999; margin-top:6px; text-align:center;">
+                Код действителен 10 минут
+            </p>
+        </div>
+
+        <p style="font-size:12px; color:#999; margin-top:12px; text-align:center;">
+            Бот запросит ваш номер телефона — это безопасно и конфиденциально
+        </p>
+
+        <div class="divider"></div>
+
+        <div id="poll-status" style="text-align:center; padding:8px;">
+            <div class="spinner"></div>
+            <span style="font-size:13px; color:#888;">Ожидаем подтверждения...</span>
+        </div>
+
+        <button class="btn btn-outline hidden" id="btn-check-now" onclick="checkPhoneNow()">
+            Проверить статус
+        </button>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════ -->
+    <!-- ЭКРАН 3: Готово — аккаунт подтверждён             -->
+    <!-- ═══════════════════════════════════════════════════ -->
+    <div id="account-view" class="hidden">
+        <div class="progress-steps">
+            <div class="progress-dot done"></div>
+            <div class="progress-dot done"></div>
+            <div class="progress-dot done"></div>
+        </div>
+
+        <div class="account-info">
+            <div class="name" id="acct-name">—</div>
+            <div class="detail" id="acct-detail"></div>
+            <div style="margin-top:12px;">
+                <span id="acct-badges"></span>
+            </div>
+        </div>
+
+        <!-- Кнопка привязки Telegram (для email-пользователей, у которых TG ещё не привязан) -->
+        <div id="link-tg-section" class="hidden" style="margin-top:20px; padding:12px; background:#fff8e1; border-radius:10px;">
+            <p style="font-size:13px; color:#f59e0b; text-align:center;">
+                Telegram не привязан. Откройте этого же бота в Telegram для привязки.
+            </p>
+            <button class="btn btn-outline" style="margin-top:8px;" onclick="openBotForPhone()">
+                Привязать Telegram
+            </button>
+        </div>
+
+        <button class="btn btn-primary" style="margin-top:16px;" onclick="logout()">
+            Выйти
+        </button>
+    </div>
+
+</div>
+
+<script>
+// ── API ──────────────────────────────────────────────────
+const API = 'http://localhost:3000';
+
+// ── Окружение ────────────────────────────────────────────
+const isTelegram = !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData);
+const isBrowser   = !isTelegram;
+let botUsername   = 'YourBot';   // обновится после первого ответа сервера
+let pollTimer     = null;
+let linkCode      = null;       // код привязки для email-пользователей
+
+// ── Инициализация ────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+    const token = localStorage.getItem('auth_token');
+
+    if (token) {
+        try {
+            const r = await fetch(API + '/me', {
+                headers: { 'Authorization': `Bearer ${token}` },
+            });
+            if (r.ok) {
+                const acc = await r.json();
+                if (acc.can_proceed) {
+                    showAccount(acc);
+                } else {
+                    // Токен валиден, но телефон не подтверждён
+                    updateBotUsername(acc);
+                    showConfirmPhoneScreen(acc);
+                }
+                return;
+            }
+        } catch (e) { /* fall through */ }
+        localStorage.removeItem('auth_token');
+    }
+
+    if (isTelegram) {
+        // Показываем быстрый вход через Telegram
+        document.getElementById('tg-quick-login').classList.remove('hidden');
+        showAuthForms();
+    } else {
+        showAuthForms();
+    }
+});
+
+// ── Telegram авторизация ─────────────────────────────────
+async function authViaTelegram() {
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+
+    const rawInitData = tg.initData;
+    if (!rawInitData) {
+        showAuthForms();
+        return;
+    }
+
+    try {
+        const r = await fetch(API + '/auth/telegram', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ init_data: rawInitData }),
+        });
+        if (!r.ok) throw new Error((await r.json()).detail || 'Ошибка');
+
+        const data = await r.json();
+        localStorage.setItem('auth_token', data.token);
+        updateBotUsername(data.account, data.bot_username);
+
+        if (data.need_phone) {
+            showConfirmPhoneScreen(data.account);
+        } else {
+            showAccount(data.account);
+        }
+    } catch (e) {
+        console.error('TG auth error:', e);
+        document.getElementById('login-error') && (document.getElementById('login-error').textContent = e.message);
+    }
+}
+
+// ── Email логин ──────────────────────────────────────────
+async function handleLogin(e) {
+    e.preventDefault();
+    const err = document.getElementById('login-error'); err.textContent = '';
+
+    try {
+        const r = await fetch(API + '/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: document.getElementById('login-email').value,
+                password: document.getElementById('login-password').value,
+            }),
+        });
+        if (!r.ok) throw new Error((await r.json()).detail || 'Ошибка входа');
+
+        const data = await r.json();
+        localStorage.setItem('auth_token', data.token);
+        updateBotUsername(data.account, data.bot_username);
+        showConfirmPhoneScreen(data.account);
+    } catch (e) {
+        err.textContent = e.message;
+    }
+}
+
+// ── Email регистрация ────────────────────────────────────
+async function handleRegister(e) {
+    e.preventDefault();
+    const err = document.getElementById('register-error'); err.textContent = '';
+
+    try {
+        const r = await fetch(API + '/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: document.getElementById('reg-email').value,
+                password: document.getElementById('reg-password').value,
+                name: document.getElementById('reg-name').value,
+            }),
+        });
+        if (!r.ok) throw new Error((await r.json()).detail || 'Ошибка регистрации');
+
+        const data = await r.json();
+        localStorage.setItem('auth_token', data.token);
+        updateBotUsername(data.account, data.bot_username);
+        showConfirmPhoneScreen(data.account);
+    } catch (e) {
+        err.textContent = e.message;
+    }
+}
+
+// ── Google OAuth ─────────────────────────────────────────
+async function startGoogleOAuth() {
+    const r = await fetch(API + '/auth/google/login');
+    const { url } = await r.json();
+    const popup = window.open(url, 'google-oauth', 'width=500,height=600');
+    const pollTimer = setInterval(async () => {
+        try {
+            if (popup?.location?.href?.includes('code=')) {
+                clearInterval(pollTimer);
+                const code = new URL(popup.location.href).searchParams.get('code');
+                popup.close();
+                const r2 = await fetch(API + `/auth/google/callback?code=${code}`);
+                if (!r2.ok) throw new Error((await r2.json()).detail || 'Ошибка Google');
+                const data = await r2.json();
+                localStorage.setItem('auth_token', data.token);
+                updateBotUsername(data.account, data.bot_username);
+                showConfirmPhoneScreen(data.account);
+            }
+        } catch (e) { /* кросс-доменный доступ — ок */ }
+    }, 500);
+    setTimeout(() => { clearInterval(pollTimer); if (popup && !popup.closed) popup.close(); }, 120000);
+}
+
+// ── Подтверждение телефона ───────────────────────────────
+async function showConfirmPhoneScreen(account) {
+    hideAll();
+    document.getElementById('confirm-phone-screen').classList.remove('hidden');
+
+    if (account.telegram_id) {
+        // Telegram уже привязан (вход был через Mini App)
+        document.getElementById('confirm-tg-flow').classList.remove('hidden');
+        document.getElementById('confirm-email-flow').classList.add('hidden');
+        document.getElementById('step1').classList.add('done');
+        document.getElementById('step1').textContent = 'Telegram привязан';
+    } else {
+        // Email-пользователь: нужно привязать Telegram и подтвердить телефон
+        document.getElementById('confirm-tg-flow').classList.add('hidden');
+        document.getElementById('confirm-email-flow').classList.remove('hidden');
+
+        // Генерируем код привязки
+        try {
+            const token = localStorage.getItem('auth_token');
+            const r = await fetch(API + '/auth/generate-link-code', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+            });
+            if (r.ok) {
+                const data = await r.json();
+                linkCode = data.code;
+                botUsername = data.bot_username || botUsername;
+                document.getElementById('link-code-display').textContent = linkCode;
+            }
+        } catch (e) {
+            console.error('Failed to generate link code:', e);
+        }
+    }
+
+    startPhonePolling();
+}
+
+function openBotForPhone() {
+    const url = isTelegram
+        ? `tg://resolve?domain=${botUsername}&start=confirm_phone`
+        : `https://t.me/${botUsername}?start=confirm_phone`;
+
+    if (isTelegram && window.Telegram?.WebApp?.openTelegramLink) {
+        window.Telegram.WebApp.openTelegramLink(url);
+    } else {
+        window.open(url, '_blank');
+    }
+}
+
+function openBotWithCode() {
+    if (!linkCode) return;
+    const url = `https://t.me/${botUsername}?start=link_${linkCode}`;
+    window.open(url, '_blank');
+}
+
+function startPhonePolling() {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(checkPhoneNow, 3000);
+}
+
+async function checkPhoneNow() {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+
+    try {
+        const r = await fetch(API + '/auth/check-phone', {
+            headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (!r.ok) throw new Error('poll failed');
+
+        const status = await r.json();
+
+        // Обновляем шаги для Telegram-пути
+        if (status.telegram_id) {
+            const s1 = document.getElementById('step1');
+            const es1 = document.getElementById('estep1');
+            if (s1) { s1.classList.add('done'); s1.textContent = 'Telegram привязан'; }
+            if (es1) { es1.classList.add('done'); es1.textContent = 'Telegram привязан'; }
+
+            const es2 = document.getElementById('estep2');
+            if (es2) { es2.classList.add('done'); es2.textContent = 'Код принят'; }
+        }
+        if (status.phone_confirmed) {
+            ['step2', 'step3', 'estep3'].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.classList.add('done');
+                if (id.includes('step')) el.textContent = id === 'step2' ? 'Телефон подтверждён' : 'Готово!';
+                else el.textContent = 'Телефон подтверждён';
+            });
+
+            document.getElementById('dot-phone').classList.add('done');
+            document.getElementById('dot-done').classList.add('done');
+
+            if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+            document.getElementById('poll-status').classList.add('hidden');
+            document.getElementById('btn-open-bot')?.classList.add('hidden');
+            document.getElementById('btn-open-bot-link')?.classList.add('hidden');
+
+            setTimeout(async () => {
+                const r2 = await fetch(API + '/me', {
+                    headers: { 'Authorization': `Bearer ${token}` },
+                });
+                if (r2.ok) showAccount(await r2.json());
+            }, 1500);
+        }
+    } catch (e) {
+        console.error('Poll error:', e);
+    }
+}
+
+// ── UI переключения ──────────────────────────────────────
+function hideAll() {
+    ['loading', 'auth-forms', 'confirm-phone-screen', 'account-view'].forEach(id => {
+        document.getElementById(id).classList.add('hidden');
+    });
+}
+
+function showAuthForms() {
+    hideAll();
+    document.getElementById('auth-forms').classList.remove('hidden');
+}
+
+function showAccount(account) {
+    hideAll();
+    document.getElementById('account-view').classList.remove('hidden');
+
+    document.getElementById('acct-name').textContent = account.name || account.phone || 'Пользователь';
+    document.getElementById('acct-detail').textContent = [
+        account.email,
+        account.phone,
+        account.telegram_id ? 'TG ID: ' + account.telegram_id : null,
+    ].filter(Boolean).join(' • ');
+
+    const badges = [];
+    if (account.telegram_id)     badges.push('<span class="badge badge-tg">Telegram</span>');
+    if (account.phone_confirmed) badges.push('<span class="badge badge-ok">Телефон ✓</span>');
+    else if (account.phone)      badges.push('<span class="badge badge-warn">Ожидает</span>');
+    if (account.google_id)       badges.push('<span class="badge badge-google">Google</span>');
+    if (account.email)           badges.push('<span class="badge badge-email">Email</span>');
+    document.getElementById('acct-badges').innerHTML = badges.join('');
+
+    // Показываем блок привязки если есть email но нет telegram_id
+    if (account.email && !account.telegram_id) {
+        document.getElementById('link-tg-section').classList.remove('hidden');
+    } else {
+        document.getElementById('link-tg-section').classList.add('hidden');
+    }
+}
+
+function switchTab(tab) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+    if (tab === 'login') {
+        document.getElementById('form-login').classList.remove('hidden');
+        document.getElementById('form-register').classList.add('hidden');
+    } else {
+        document.getElementById('form-register').classList.remove('hidden');
+        document.getElementById('form-login').classList.add('hidden');
+    }
+}
+
+function updateBotUsername(account, username) {
+    if (username) botUsername = username;
+}
+
+function logout() {
+    localStorage.removeItem('auth_token');
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    location.reload();
+}
+</script>
+</body>
+</html>
