@@ -1,3 +1,15 @@
 .env
 __pycache__/
 .claude/
+*.db
+*.db-shm
+*.db-wal
+*.db.bak
+*.db-journal
+*.bak
+*.png
+*.jpg
+*.xmind
+*.docx
+чек/
+.playwright-mcp/
